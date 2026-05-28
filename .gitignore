@@ -1,0 +1,38 @@
+# --- Секретні файли (КРИТИЧНО) ---
+.env
+.env.*
+!.env.example
+
+# --- Frontend (Vite / React) ---
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/coverage/
+frontend/.npm/
+frontend/.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Backend (Go) ---
+# Зібрані бінарні файли (якщо ти білдив локально)
+backend/main
+backend/main.exe
+backend/__debug_bin
+# Кеш та тести Go
+*.test
+*.prof
+
+# --- Системні файли та логи ---
+.DS_Store
+Thumbs.db
+*.log
+
+# --- Налаштування IDE (VS Code, WebStorm тощо) ---
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-mainBg text-textMain antialiased selection:bg-primary selection:text-white;
+  }
+}
+
+/* Кастомний скроллбар під темну тему */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-mainBg;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-surfaceBorder rounded-full hover:bg-primary/50 transition-colors;
+}
