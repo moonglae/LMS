@@ -415,8 +415,3 @@ func (h *ContentHandler) GenerateQuiz(w http.ResponseWriter, r *http.Request) {
 
     json.NewEncoder(w).Encode(quiz)
 }
-func (h *ContentHandler) DeleteFlashcards(w http.ResponseWriter, r *http.Request) {
-    moduleID := r.URL.Query().Get("module_id")
-    h.DB.Exec("DELETE FROM flashcards WHERE module_id = $1", moduleID)
-    w.WriteHeader(http.StatusOK)
-}

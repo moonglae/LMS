@@ -8,10 +8,10 @@ import Flashcards from './pages/Flashcards';
 import Quiz from './pages/Quiz';
 import Mistakes from './pages/Mistakes';
 import Profile from './pages/Profile';
-import TeacherPanel from './pages/TeacherPanel';
-import Report from './pages/Report';
 import ModuleEditor from './pages/ModuleEditor';
 import TheoryView from './pages/TheoryView';
+// Імпортуємо наш новий компонент чату
+import AIChat from './pages/AIChat';
 
 function App() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -42,9 +42,7 @@ function App() {
           <Route path="module/new" element={<ModuleEditor />} />
           <Route path="module/:id/edit" element={<ModuleEditor />} />
 
-          {/* Аналітика та тести */}
-          <Route path="teacher" element={<TeacherPanel />} />
-          <Route path="report" element={<Report />} />
+          {/* Аналітика та тести - видалено (статистика у профілі) */}
 
           <Route path="mistakes" element={<Mistakes />} />
           <Route path="quiz/mistakes" element={<Quiz />} />
@@ -52,6 +50,9 @@ function App() {
 
           <Route path="profile" element={<Profile />} />
           <Route path="/modules/:id/theory" element={<TheoryView />} />
+
+          {/* Наш новий маршрут для ШІ Тренажера */}
+          <Route path="practice/chat" element={<AIChat />} />
         </Route>
       </Routes>
     </BrowserRouter>

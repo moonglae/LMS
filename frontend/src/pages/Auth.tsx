@@ -17,7 +17,6 @@ export default function Auth() {
     const [password, setPassword] = useState('');
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState(''); // ДОДАНО
-    const [role, setRole] = useState<'student' | 'teacher'>('student');
 
     // Стани для UI
     const [isLoading, setIsLoading] = useState(false);
@@ -52,7 +51,6 @@ export default function Auth() {
                         password,
                         first_name: firstName,
                         last_name: lastName, // ВИКОРИСТОВУЄМО ЗМІННУ
-                        role,
                     }),
                 });
 
@@ -96,10 +94,6 @@ export default function Auth() {
                 <form onSubmit={handleSubmit} className="space-y-5">
                     {!isLogin && (
                         <>
-                            <div className="flex bg-mainBg rounded-xl p-1 border border-surfaceBorder">
-                                <button type="button" onClick={() => setRole('student')} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${role === 'student' ? 'bg-surface border border-surfaceBorder text-primary' : 'text-textMuted'}`}>Студент</button>
-                                <button type="button" onClick={() => setRole('teacher')} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${role === 'teacher' ? 'bg-surface border border-surfaceBorder text-primary' : 'text-textMuted'}`}>Викладач</button>
-                            </div>
 
                             {/* Поля імені та прізвища */}
                             <div className="grid grid-cols-2 gap-4">

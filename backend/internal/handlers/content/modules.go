@@ -1,7 +1,6 @@
 package content
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -13,7 +12,7 @@ import (
 	"backend/internal/handlers/auth"
 )
 
-// GetModules повертає список курсів залежно від ролі користувача
+// GetModules повертає список курсів для користувача
 func (h *ContentHandler) GetModules(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
 
@@ -22,45 +21,23 @@ func (h *ContentHandler) GetModules(w http.ResponseWriter, r *http.Request) {
         http.Error(w, `{"error": "Неавторизований доступ"}`, http.StatusUnauthorized)
         return
     }
-    role, _ := auth.GetUserRole(r.Context())
 
-    var rows *sql.Rows
-    var err error
-
-    if role == "teacher" {
-        rows, err = h.DB.Query(`
-            SELECT
-                m.id, 
-                m.title, 
-                m.description, 
-                m.theory, 
-                COALESCE(m.invite_code, '') AS invite_code,
-                COUNT(DISTINCT e.user_id) FILTER (WHERE u.role = 'student') AS student_count,
-                m.created_by
-            FROM modules m
-            LEFT JOIN enrollments e ON m.id = e.module_id
-            LEFT JOIN users u ON e.user_id = u.id
-            WHERE m.created_by = $1
-            GROUP BY m.id
-            ORDER BY m.id DESC
-        `, userID)
-    } else {
-        // Для студента
-        rows, err = h.DB.Query(`
-            SELECT DISTINCT
-                m.id, 
-                m.title, 
-                m.description, 
-                m.theory, 
-                COALESCE(m.invite_code, '') AS invite_code,
-                0 AS student_count,
-                m.created_by
-            FROM modules m
-            LEFT JOIN enrollments e ON m.id = e.module_id
-            WHERE m.created_by = $1 OR e.user_id = $1
-            ORDER BY m.id DESC
-        `, userID)
-    }
+    // Повертаємо модулі, які користувач створив або в яких зареєстрований
+    rows, err := h.DB.Query(`
+        SELECT DISTINCT
+            m.id, 
+            m.title, 
+            m.description, 
+            m.theory, 
+            COALESCE(m.invite_code, '') AS invite_code,
+            COUNT(DISTINCT e.user_id) AS student_count,
+            m.created_by
+        FROM modules m
+        LEFT JOIN enrollments e ON m.id = e.module_id
+        WHERE m.created_by = $1 OR e.user_id = $1
+        GROUP BY m.id, m.title, m.description, m.theory, m.invite_code, m.created_by
+        ORDER BY m.id DESC
+    `, userID)
 
     if err != nil {
         log.Printf("GetModules Error: %v", err)

@@ -23,7 +23,6 @@ type UserData struct {
 	Email     string    `json:"email"`
 	FirstName string    `json:"first_name"`
 	LastName  string    `json:"last_name"`
-	Role      string    `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -39,10 +38,10 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 
 	var u UserData
 	err := h.DB.QueryRow(`
-		SELECT id, email, first_name, last_name, role, created_at 
+		SELECT id, email, first_name, last_name, created_at 
 		FROM users 
 		WHERE id = $1`, userID).Scan(
-		&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.Role, &u.CreatedAt,
+		&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.CreatedAt,
 	)
 
 	if err != nil {

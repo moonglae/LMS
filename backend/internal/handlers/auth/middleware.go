@@ -14,8 +14,7 @@ import (
 type contextKey string
 
 const (
-	UserIDKey   contextKey = "userID"
-	UserRoleKey contextKey = "userRole"
+	UserIDKey contextKey = "userID"
 )
 
 func getIntFromClaim(value interface{}) (int, bool) {
@@ -94,11 +93,9 @@ func Protect(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		role, _ := claims["role"].(string)
-		log.Printf("Protect Success: Користувач %d (роль: %s) авторизований", userID, role)
+		log.Printf("Protect Success: Користувач %d авторизований", userID)
 
 		ctx := context.WithValue(r.Context(), UserIDKey, userID)
-		ctx = context.WithValue(ctx, UserRoleKey, role)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	}
 }
@@ -108,7 +105,3 @@ func GetUserID(ctx context.Context) (int, bool) {
 	return userID, ok
 }
 
-func GetUserRole(ctx context.Context) (string, bool) {
-	role, ok := ctx.Value(UserRoleKey).(string)
-	return role, ok
-}

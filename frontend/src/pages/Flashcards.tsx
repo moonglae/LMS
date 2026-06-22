@@ -119,7 +119,7 @@ export default function Flashcards() {
                 <p className="text-textMuted">Поверніться назад або додайте нову картку у редакторі курсу.</p>
                 <button
                     type="button"
-                    onClick={() => navigate('/teacher')}
+                    onClick={() => navigate(`/module/${moduleId}/edit`)}
                     className="mt-6 bg-primary hover:bg-primaryHover text-white px-6 py-3 rounded-xl font-medium transition-colors"
                 >
                     Створити картки

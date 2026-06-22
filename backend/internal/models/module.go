@@ -9,7 +9,6 @@ type User struct {
 	PasswordHash string    `json:"-"` // Завдяки "-" хеш пароля НІКОЛИ не потрапить у JSON-відповідь на фронтенд
 	FirstName    string    `json:"first_name"`
 	LastName     string    `json:"last_name"`
-	Role         string    `json:"role"` // 'student', 'teacher', 'admin'
 	CreatedAt    time.Time `json:"created_at"`
 }
 
@@ -82,4 +81,21 @@ type UserQuestionAttempt struct {
 	QuestionID  int       `json:"question_id"`
 	IsCorrect   bool      `json:"is_correct"`
 	AttemptedAt time.Time `json:"attempted_at"`
+}
+
+type SavedMistake struct {
+	ID              int       `json:"id"`
+	UserID          int       `json:"user_id"`
+	WrongText       string    `json:"wrong_text"`
+	CorrectText     string    `json:"correct_text"`
+	RuleExplanation string    `json:"rule_explanation"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+type SavedVocabulary struct {
+	ID              int       `json:"id"`
+	UserID          int       `json:"user_id"`
+	Word            string    `json:"word"`
+	Translation     string    `json:"translation"`
+	ContextSentence string    `json:"context_sentence"`
+	CreatedAt       time.Time `json:"created_at"`
 }

@@ -3,7 +3,6 @@
     email: string;
     first_name: string;
     last_name: string;
-    role: 'student' | 'teacher';
 }
 
 export interface Module {

@@ -1,36 +1,17 @@
 // src/components/Layout.tsx
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Outlet, Link, useNavigate } from 'react-router-dom';
 import {
     LogOut,
     BookOpen,
     User,
     AlertTriangle,
-    BookPlus,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { apiFetch } from '../api';
-
-type UserRole = 'student' | 'teacher' | 'admin';
 
 export default function Layout() {
     const logout = useAuthStore((state) => state.logout);
     const navigate = useNavigate();
-    const [role, setRole] = useState<UserRole | null>(null);
-
-    useEffect(() => {
-        const fetchRole = async () => {
-            try {
-                const userData = await apiFetch('/me');
-                if (userData && typeof userData.role === 'string') {
-                    setRole(userData.role as UserRole);
-                }
-            } catch (err) {
-                console.error('Помилка перевірки сесії', err);
-            }
-        };
-        fetchRole();
-    }, []);
 
     const handleLogout = () => {
         logout();
@@ -49,29 +30,15 @@ export default function Layout() {
                     </Link>
 
                     <div className="flex items-center gap-4">
-                        {role === 'teacher' && (
-                            <Link
-                                to="/teacher"
-                                className="flex items-center gap-2 text-primary hover:text-primaryHover transition-colors mr-2"
-                            >
-                                <BookPlus className="w-5 h-5" />
-                                <span className="text-sm font-medium hidden sm:block">
-                                    Аналітичний центр
-                                </span>
-                            </Link>
-                        )}
-
-                        {role === 'student' && (
-                            <Link
-                                to="/mistakes"
-                                className="flex items-center gap-2 text-yellow-500 hover:text-yellow-400 transition-colors mr-2"
-                            >
-                                <AlertTriangle className="w-5 h-5" />
-                                <span className="text-sm font-medium hidden sm:block">
-                                    Помилки
-                                </span>
-                            </Link>
-                        )}
+                        <Link
+                            to="/mistakes"
+                            className="flex items-center gap-2 text-textMuted hover:text-textMain transition-colors"
+                        >
+                            <AlertTriangle className="w-5 h-5" />
+                            <span className="text-sm font-medium hidden sm:block">
+                                Помилки
+                            </span>
+                        </Link>
 
                         <Link
                             to="/profile"
@@ -95,12 +62,12 @@ export default function Layout() {
                             </span>
                         </button>
                     </div>
-                </div>
-            </header>
+                </div >
+            </header >
 
             <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8">
                 <Outlet />
             </main>
-        </div>
+        </div >
     );
 }
