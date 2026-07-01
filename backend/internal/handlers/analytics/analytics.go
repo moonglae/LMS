@@ -279,17 +279,21 @@ func (h *AnalyticsHandler) GetProgressData(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	query := `
+	// 1. Формуємо запит одразу з userID за допомогою fmt.Sprintf
+	// %d заміниться на число userID
+	query := fmt.Sprintf(`
 		SELECT 
 			TO_CHAR(completed_at, 'DD.MM') as date, 
 			FLOOR(AVG(score::numeric / total_questions * 100))::int as score
 		FROM quiz_attempts 
-		WHERE user_id = $1 
+		WHERE user_id = %d 
 		GROUP BY DATE(completed_at), TO_CHAR(completed_at, 'DD.MM')
 		ORDER BY DATE(completed_at) ASC
-	`
+	`, userID)
 	
-	rows, err := h.DB.Query(query, userID)
+	// 2. Викликаємо Query ТІЛЬКИ з текстом запиту (без userID другим параметром)
+	// Це змусить Go використати простий протокол без кешування шаблонів
+	rows, err := h.DB.Query(query)
 	if err != nil {
 		log.Printf("Progress Data Error: %v", err)
 		http.Error(w, "Помилка отримання даних графіка", http.StatusInternalServerError)
