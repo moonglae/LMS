@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
-import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Shuffle } from 'lucide-react';
 import { apiFetch } from '../api';
 
 interface GeneratedQuestion {
@@ -9,6 +9,31 @@ interface GeneratedQuestion {
     question_text: string;
     options: string[];
     correct: string;
+    source_id?: number;
+}
+
+function buildReverseQuestion(question: GeneratedQuestion, allQuestions: GeneratedQuestion[]): GeneratedQuestion | null {
+    if (!question?.question_text || !question?.correct) return null;
+
+    const reverseQuestionText = question.correct;
+    const reverseCorrect = question.question_text;
+
+    const reverseOptions = allQuestions
+        .map(item => item.question_text)
+        .filter((option, index, array) => Boolean(option) && option !== reverseCorrect && array.indexOf(option) === index)
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 3);
+
+    if (!reverseQuestionText || !reverseCorrect) return null;
+
+    return {
+        ...question,
+        id: question.id + 1000000,
+        source_id: question.source_id ?? question.id,
+        question_text: reverseQuestionText,
+        correct: reverseCorrect,
+        options: [reverseCorrect, ...reverseOptions].sort(() => Math.random() - 0.5),
+    };
 }
 
 interface AnswerResult {
@@ -34,6 +59,7 @@ export default function Quiz() {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [isShuffling, setIsShuffling] = useState(false);
 
     useEffect(() => {
         const fetchQuiz = async () => {
@@ -57,7 +83,16 @@ export default function Quiz() {
                     return;
                 }
 
-                setQuestions(data);
+                const expandedQuestions = data.flatMap((question: GeneratedQuestion) => {
+                    const questionsToAdd = [question];
+                    const reverseQuestion = buildReverseQuestion(question, data);
+                    if (reverseQuestion) {
+                        questionsToAdd.push(reverseQuestion);
+                    }
+                    return questionsToAdd;
+                });
+
+                setQuestions(expandedQuestions);
             } catch (err: any) {
                 setError(err.message || 'Помилка завантаження.');
             } finally {
@@ -96,7 +131,7 @@ export default function Quiz() {
         const question = questions[currentQ];
         const isCorrect = selectedOption === question.correct;
 
-        setAnswers(prev => [...prev, { question_id: question.id, is_correct: isCorrect }]);
+        setAnswers(prev => [...prev, { question_id: question.source_id ?? question.id, is_correct: isCorrect }]);
 
         if (isCorrect) setScore((prev) => prev + 1);
 
@@ -105,6 +140,20 @@ export default function Quiz() {
         } else {
             setIsFinished(true);
         }
+    };
+
+    const handleShuffle = () => {
+        if (questions.length <= 1) return;
+
+        setIsShuffling(true);
+        const currentQuestion = questions[currentQ];
+        const restQuestions = questions.filter((_, index) => index !== currentQ);
+        const shuffledRest = [...restQuestions].sort(() => Math.random() - 0.5);
+        const shuffledQuestions = [currentQuestion, ...shuffledRest];
+
+        setQuestions(shuffledQuestions);
+        setCurrentQ(0);
+        setTimeout(() => setIsShuffling(false), 150);
     };
 
     if (isLoading) return <div className="flex justify-center mt-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
@@ -137,11 +186,22 @@ export default function Quiz() {
     return (
         <div className="max-w-xl mx-auto mt-20 p-4">
             <div className="mb-8">
-                <span className="text-primary font-semibold text-sm">
-                    Питання {currentQ + 1} з {questions.length} {isMistakesMode && '(Виправлення)'}
-                </span>
+                <div className="flex items-center justify-between gap-3">
+                    <span className="text-primary font-semibold text-sm">
+                        Питання {currentQ + 1} з {questions.length} {isMistakesMode && '(Виправлення)'}
+                    </span>
+                    <button
+                        onClick={handleShuffle}
+                        className="inline-flex items-center gap-2 rounded-xl border border-surfaceBorder bg-surface px-3 py-2 text-sm font-medium text-textMain transition-colors hover:bg-surfaceBorder"
+                    >
+                        <Shuffle className="w-4 h-4" />
+                        Перемішати
+                    </button>
+                </div>
                 <h2 className="text-2xl font-bold mt-2 text-textMain">{question.question_text}</h2>
             </div>
+
+            {isShuffling && <p className="mb-4 text-sm text-textMuted">Перемішую питання...</p>}
 
             <div className="space-y-4">
                 {question.options.map((opt, index) => (
