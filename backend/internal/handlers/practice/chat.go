@@ -123,7 +123,7 @@ func (h *Handler) ChatWithAI(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey
+		url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" + apiKey
 
 		
 		resp, err := http.Post(url, "application/json", bytes.NewBuffer(requestBody))
