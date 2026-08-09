@@ -30,7 +30,7 @@ type AIResponse struct {
 }
 
 // --- 2. СТРУКТУРИ ДЛЯ GOOGLE GEMINI API ---
-// (Твої структури без змін)
+
 type GeminiRequest struct {
 	Contents         []GeminiContent `json:"contents"`
 	GenerationConfig GeminiConfig    `json:"generationConfig"`
@@ -118,23 +118,23 @@ func (h *Handler) ChatWithAI(w http.ResponseWriter, r *http.Request) {
 	var isSuccess bool
 
 	for i, apiKey := range apiKeys {
-		// Пропускаємо порожні ключі (якщо ти забув додати їх у .env)
+		
 		if apiKey == "" {
 			continue
 		}
 
 		url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey
 
-		// Важливо: для кожної спроби створюємо новий буфер, бо після попереднього читання він порожній
+		
 		resp, err := http.Post(url, "application/json", bytes.NewBuffer(requestBody))
 		if err != nil {
 			log.Printf("Користувач %d: помилка з'єднання з ШІ (Ключ %d): %v", userID, i+1, err)
 			continue // Йдемо до наступного ключа, якщо відпав інтернет
 		}
 
-		// Читаємо відповідь одразу, щоб можна було закрити Body всередині циклу
+	
 		respBody, err := io.ReadAll(resp.Body)
-		resp.Body.Close() // ЗАКРИВАЄМО ВРУЧНУ, без defer!
+		resp.Body.Close() 
 
 		if err != nil {
 			log.Printf("Помилка читання відповіді (Ключ %d): %v", i+1, err)
@@ -153,10 +153,10 @@ func (h *Handler) ChatWithAI(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Якщо ми тут, запит успішний!
+		
 		bodyBytes = respBody
 		isSuccess = true
-		break // Виходимо з циклу, інші ключі не чіпаємо
+		break 
 	}
 
 	// Якщо всі ключі вичерпані або не спрацювали
