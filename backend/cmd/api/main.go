@@ -87,7 +87,7 @@ func main() {
 		w.WriteHeader(http.StatusOK) 
 		w.Write([]byte("pong"))      
 	}
-}
+)
 
 	mux.HandleFunc("/api/modules", auth.Protect(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
