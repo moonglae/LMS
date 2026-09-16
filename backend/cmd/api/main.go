@@ -82,9 +82,11 @@ func main() {
 
 	// --- ЗАХИЩЕНІ МАРШРУТИ ---
 	mux.HandleFunc("/api/me", auth.Protect(methodHandler("GET", userH.GetMe)))
-	http.HandleFunc("/api/ping", func(w http.ResponseWriter, r *http.Request) {
-    w.WriteHeader(http.StatusOK) // Повертаємо зелений статус 200
-    w.Write([]byte("pong"))      // Просто текст відповіді
+	
+	mux.HandleFunc("/api/ping", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK) 
+		w.Write([]byte("pong"))      
+	})
 })
 
 	mux.HandleFunc("/api/modules", auth.Protect(func(w http.ResponseWriter, r *http.Request) {
