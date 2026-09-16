@@ -12,7 +12,6 @@ import (
 	"backend/internal/handlers/auth"
 )
 
-// GetModules повертає список курсів для користувача
 func (h *ContentHandler) GetModules(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
 
@@ -22,8 +21,8 @@ func (h *ContentHandler) GetModules(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Повертаємо модулі, які користувач створив або в яких зареєстрований
-    rows, err := h.DB.Query(`
+    // Формуємо запит через fmt.Sprintf, замінюючи $1 на %d (передаємо userID двічі)
+    query := fmt.Sprintf(`
         SELECT DISTINCT
             m.id, 
             m.title, 
@@ -34,10 +33,13 @@ func (h *ContentHandler) GetModules(w http.ResponseWriter, r *http.Request) {
             m.created_by
         FROM modules m
         LEFT JOIN enrollments e ON m.id = e.module_id
-        WHERE m.created_by = $1 OR e.user_id = $1
+        WHERE m.created_by = %d OR e.user_id = %d
         GROUP BY m.id, m.title, m.description, m.theory, m.invite_code, m.created_by
         ORDER BY m.id DESC
-    `, userID)
+    `, userID, userID)
+
+    // Викликаємо Query ТІЛЬКИ з текстом запиту, щоб відключити кешування пулера
+    rows, err := h.DB.Query(query)
 
     if err != nil {
         log.Printf("GetModules Error: %v", err)
@@ -59,46 +61,51 @@ func (h *ContentHandler) GetModules(w http.ResponseWriter, r *http.Request) {
     json.NewEncoder(w).Encode(modules)
 }
 
+// GetModuleStudents повертає студентів курсу
 func (h *ContentHandler) GetModuleStudents(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+    w.Header().Set("Content-Type", "application/json")
 
-	userID, ok := auth.GetUserID(r.Context())
-	if !ok {
-		http.Error(w, `{"error": "Неавторизований"}`, http.StatusUnauthorized)
-		return
-	}
+    userID, ok := auth.GetUserID(r.Context())
+    if !ok {
+        http.Error(w, `{"error": "Неавторизований"}`, http.StatusUnauthorized)
+        return
+    }
 
-	moduleIDStr := r.URL.Query().Get("module_id")
-	moduleID, _ := strconv.Atoi(moduleIDStr)
+    moduleIDStr := r.URL.Query().Get("module_id")
+    moduleID, _ := strconv.Atoi(moduleIDStr)
 
-	// Перевірка власника
-	var ownerID int
-	err := h.DB.QueryRow(`SELECT created_by FROM modules WHERE id = $1`, moduleID).Scan(&ownerID)
-	if err != nil || ownerID != userID {
-		http.Error(w, `{"error": "Доступ заборонено"}`, http.StatusForbidden)
-		return
-	}
+    // Перевірка власника (використовуємо fmt.Sprintf для moduleID)
+    var ownerID int
+    checkQuery := fmt.Sprintf(`SELECT created_by FROM modules WHERE id = %d`, moduleID)
+    err := h.DB.QueryRow(checkQuery).Scan(&ownerID)
+    if err != nil || ownerID != userID {
+        http.Error(w, `{"error": "Доступ заборонено"}`, http.StatusForbidden)
+        return
+    }
 
-	rows, err := h.DB.Query(`
-		SELECT u.id, u.first_name, u.last_name, u.email
-		FROM users u
-		JOIN enrollments e ON u.id = e.user_id
-		WHERE e.module_id = $1
-		ORDER BY u.last_name
-	`, moduleID)
-	if err != nil {
-		http.Error(w, "Помилка БД", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
+    // Отримання студентів
+    studentsQuery := fmt.Sprintf(`
+        SELECT u.id, u.first_name, u.last_name, u.email
+        FROM users u
+        JOIN enrollments e ON u.id = e.user_id
+        WHERE e.module_id = %d
+        ORDER BY u.last_name
+    `, moduleID)
 
-	students := []ModuleStudentResponse{}
-	for rows.Next() {
-		var s ModuleStudentResponse
-		rows.Scan(&s.ID, &s.FirstName, &s.LastName, &s.Email)
-		students = append(students, s)
-	}
-	json.NewEncoder(w).Encode(students)
+    rows, err := h.DB.Query(studentsQuery)
+    if err != nil {
+        http.Error(w, "Помилка БД", http.StatusInternalServerError)
+        return
+    }
+    defer rows.Close()
+
+    students := []ModuleStudentResponse{}
+    for rows.Next() {
+        var s ModuleStudentResponse
+        rows.Scan(&s.ID, &s.FirstName, &s.LastName, &s.Email)
+        students = append(students, s)
+    }
+    json.NewEncoder(w).Encode(students)
 }
 
 func (h *ContentHandler) CreateModule(w http.ResponseWriter, r *http.Request) {
