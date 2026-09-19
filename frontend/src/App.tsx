@@ -12,6 +12,7 @@ import ModuleEditor from './pages/ModuleEditor';
 import TheoryView from './pages/TheoryView';
 // Імпортуємо наш новий компонент чату
 import AIChat from './pages/AIChat';
+import AITest from './pages/AITest';
 
 function App() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -53,6 +54,7 @@ function App() {
 
           {/* Наш новий маршрут для ШІ Тренажера */}
           <Route path="practice/chat" element={<AIChat />} />
+          <Route path="practice/ai-test" element={<AITest />} />
         </Route>
       </Routes>
     </BrowserRouter>

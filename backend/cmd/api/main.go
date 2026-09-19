@@ -123,7 +123,7 @@ func main() {
 			contentH.CreateQuiz(w, r)
 		}
 	}))
-	
+
 	mux.HandleFunc("/api/quizzes/questions", auth.Protect(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			contentH.GetQuizQuestions(w, r)
@@ -143,12 +143,14 @@ func main() {
 	mux.HandleFunc("/api/profile/stats", auth.Protect(methodHandler("GET", analyticsH.GetProfileStats)))
 
 	// --- ПРАКТИКА ТА АВТОКОМПЛІТ ---
+	// --- ПРАКТИКА ТА АВТОКОМПЛІТ ---
 	mux.HandleFunc("/api/practice/chat", auth.Protect(methodHandler("POST", practiceHandler.ChatWithAI)))
+	mux.HandleFunc("/api/practice/generate-test", auth.Protect(methodHandler("POST", practiceHandler.GenerateAITest)))
 	mux.HandleFunc("/api/practice/mistakes/save", auth.Protect(methodHandler("POST", practiceHandler.SaveMistake)))
 	mux.HandleFunc("/api/practice/vocabulary/save", auth.Protect(methodHandler("POST", practiceHandler.SaveVocabulary)))
 	mux.HandleFunc("/api/practice/mistakes", auth.Protect(methodHandler("GET", practiceHandler.GetMyMistakes)))
 	mux.HandleFunc("/api/autocomplete", auth.Protect(methodHandler("GET", dictionary.AutocompleteHandler)))
-// Маршрути для цілей (To-Do)
+	// Маршрути для цілей (To-Do)
 	mux.HandleFunc("/api/profile/goals", auth.Protect(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Book, Loader2, AlertCircle, KeyRound, Plus, Search, Bot } from 'lucide-react';
+import { Book, Loader2, AlertCircle, KeyRound, Plus, Search, Bot, Sparkles } from 'lucide-react';
 import { apiFetch } from '../api';
 import type { Module } from '../types';
 
@@ -166,9 +166,23 @@ export default function Dashboard() {
                                 <button onClick={() => navigate(`/modules/${mod.id}/flashcards`)} className="text-primary text-sm font-medium hover:text-white transition-colors">
                                     Картки
                                 </button>
-                                <button onClick={() => navigate(`/modules/${mod.id}/quiz`)} className="text-green-500 text-sm font-medium hover:text-white transition-colors">
+                                <button onClick={() => navigate(`/modules/${mod.id}/quiz`)} className="text-green-500 text-sm font-medium hover:text-green-400 transition-colors">
                                     Тест
                                 </button>
+
+                                {/* Кнопка: ШІ Граматика */}
+                                <button
+                                    onClick={() => navigate('/practice/ai-test', {
+                                        state: {
+                                            topic: `${mod.description} (Граматика)`,
+                                            theory: mod.theory
+                                        }
+                                    })}
+                                    className="text-purple-500 text-sm font-medium hover:text-purple-400 transition-colors flex items-center gap-1"
+                                >
+                                    <Sparkles className="w-4 h-4" /> ШІ Граматика
+                                </button>
+
                                 {userId === mod.created_by && (
                                     <button onClick={() => navigate(`/module/${mod.id}/edit`)} className="text-yellow-500 text-sm font-medium hover:text-yellow-400 transition-colors ml-auto">
                                         Редагувати

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, Save, CheckCircle2 } from 'lucide-react';
+import { Send, Bot, User, Loader2, Save, CheckCircle2, Mic, MicOff } from 'lucide-react';
 import { apiFetch } from '../api';
 
 type Mistake = {
@@ -28,12 +28,54 @@ export default function AIChat() {
     const [isLoading, setIsLoading] = useState(false);
     const [savedMistakes, setSavedMistakes] = useState<Set<string>>(new Set());
 
+    // Голосовий ввід
+    const [isListening, setIsListening] = useState(false);
+    const recognitionRef = useRef<any>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     // Автоматична прокрутка вниз при новому повідомленні
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+
+    // Ініціалізація розпізнавання голосу
+    useEffect(() => {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            recognitionRef.current = new SpeechRecognition();
+            recognitionRef.current.lang = 'en-US'; // Мова розпізнавання
+            recognitionRef.current.continuous = false;
+            recognitionRef.current.interimResults = false;
+
+            recognitionRef.current.onresult = (event: any) => {
+                const transcript = event.results[0][0].transcript;
+                // Додаємо текст до поточного інпуту
+                setInput((prev) => prev + (prev ? ' ' : '') + transcript);
+                setIsListening(false);
+            };
+
+            recognitionRef.current.onerror = (event: any) => {
+                console.error("Помилка розпізнавання:", event.error);
+                setIsListening(false);
+            };
+
+            recognitionRef.current.onend = () => {
+                setIsListening(false);
+            };
+        } else {
+            console.warn("Цей браузер не підтримує Web Speech API");
+        }
+    }, []);
+
+    const toggleListening = () => {
+        if (isListening) {
+            recognitionRef.current?.stop();
+            setIsListening(false);
+        } else {
+            recognitionRef.current?.start();
+            setIsListening(true);
+        }
+    };
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -42,13 +84,17 @@ export default function AIChat() {
         const userMessageText = input.trim();
         setInput('');
 
-        // Додаємо повідомлення користувача в UI
+        // Якщо був увімкнений мікрофон - вимикаємо
+        if (isListening) {
+            recognitionRef.current?.stop();
+            setIsListening(false);
+        }
+
         const newUserMsg: Message = { id: Date.now().toString(), sender: 'user', text: userMessageText };
         setMessages(prev => [...prev, newUserMsg]);
         setIsLoading(true);
 
         try {
-            // Відправляємо на наш Go-сервер
             const data = await apiFetch('/practice/chat', {
                 method: 'POST',
                 body: JSON.stringify({
@@ -59,7 +105,6 @@ export default function AIChat() {
                 })
             });
 
-            // Додаємо відповідь ШІ в UI
             const newAiMsg: Message = {
                 id: (Date.now() + 1).toString(),
                 sender: 'ai',
@@ -69,7 +114,6 @@ export default function AIChat() {
             setMessages(prev => [...prev, newAiMsg]);
 
         } catch (error: any) {
-            // У разі помилки виводимо системне повідомлення
             setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 sender: 'ai',
@@ -86,7 +130,6 @@ export default function AIChat() {
                 method: 'POST',
                 body: JSON.stringify(mistake)
             });
-            // Зберігаємо ключ, щоб показати галочку "Збережено"
             setSavedMistakes(prev => new Set(prev).add(mistakeKey));
         } catch (error) {
             alert('Помилка при збереженні. Спробуйте ще раз.');
@@ -134,7 +177,6 @@ export default function AIChat() {
                     <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[80%] md:max-w-[70%] flex gap-3 ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
 
-                            {/* Аватарка */}
                             <div className="mt-auto shrink-0">
                                 {msg.sender === 'user' ? (
                                     <div className="bg-primary/20 p-2 rounded-full"><User className="w-5 h-5 text-primary" /></div>
@@ -143,18 +185,15 @@ export default function AIChat() {
                                 )}
                             </div>
 
-                            {/* Контент повідомлення */}
                             <div className="space-y-2">
                                 <div className={`p-4 rounded-2xl ${msg.sender === 'user' ? 'bg-primary text-white rounded-br-sm' : 'bg-mainBg border border-surfaceBorder text-textMain rounded-bl-sm'}`}>
                                     {msg.text}
                                 </div>
 
-                                {/* Блок з помилками (якщо є) */}
                                 {msg.mistakes && msg.mistakes.length > 0 && (
                                     <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4 mt-2 space-y-4">
                                         <p className="text-xs font-bold text-red-400 uppercase tracking-wider">Аналіз помилок:</p>
                                         {msg.mistakes.map((mistake, idx) => {
-                                            // Унікальний ключ для перевірки чи збережено
                                             const mistakeKey = `${msg.id}-${idx}`;
                                             const isSaved = savedMistakes.has(mistakeKey);
 
@@ -200,6 +239,20 @@ export default function AIChat() {
             {/* Зона вводу */}
             <div className="bg-mainBg border-t border-surfaceBorder p-4">
                 <form onSubmit={handleSendMessage} className="flex gap-2">
+
+                    {/* Кнопка мікрофона */}
+                    <button
+                        type="button"
+                        onClick={toggleListening}
+                        className={`p-3 rounded-xl transition-colors flex items-center justify-center min-w-[50px] ${isListening
+                            ? 'bg-red-500 text-white animate-pulse'
+                            : 'bg-surface border border-surfaceBorder text-textMain hover:border-primary'
+                            }`}
+                        title={isListening ? "Зупинити запис" : "Голосовий ввід"}
+                    >
+                        {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                    </button>
+
                     <input
                         type="text"
                         value={input}

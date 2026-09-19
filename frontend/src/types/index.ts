@@ -9,9 +9,10 @@ export interface Module {
     id: number;
     title: string;
     description: string;
+    theory?: string;
     invite_code: string;
     student_count?: number;
-    created_by: number; // <-- Додай цей рядок
+    created_by: number;
 }
 
 export interface Flashcard {
