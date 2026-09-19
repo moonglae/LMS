@@ -29,7 +29,6 @@ type AIResponse struct {
 	} `json:"mistakes"`
 }
 
-// --- 2. СТРУКТУРИ ДЛЯ GOOGLE GEMINI API ---
 // (Твої структури без змін)
 type GeminiRequest struct {
 	Contents         []GeminiContent `json:"contents"`

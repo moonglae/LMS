@@ -147,9 +147,6 @@ export default function Profile() {
                         <div className="flex items-center justify-center gap-2 text-xs text-textMuted mb-4">
                             <Calendar size={14} /> Реєстрація: {formatRegDate(userData.created_at)}
                         </div>
-                        <div className="inline-block px-3 py-1 bg-green-500/10 text-green-400 rounded-full text-xs font-bold uppercase tracking-wider">
-                            Учень
-                        </div>
                     </div>
 
                     <div className="bg-gradient-to-br from-orange-500/10 to-red-500/10 border border-orange-500/20 rounded-3xl p-6 text-center relative overflow-hidden group">

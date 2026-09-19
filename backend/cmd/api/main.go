@@ -63,6 +63,7 @@ func main() {
 		log.Fatalf("Критична помилка БД: %v", err)
 	}
 	defer db.Close()
+	
 	dictionary, err := practice.LoadDictionary("english.json")
 	if err != nil {
 		log.Fatalf("Помилка завантаження словника: %v", err)
@@ -82,6 +83,11 @@ func main() {
 
 	// --- ЗАХИЩЕНІ МАРШРУТИ ---
 	mux.HandleFunc("/api/me", auth.Protect(methodHandler("GET", userH.GetMe)))
+	
+	mux.HandleFunc("/api/ping", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("pong"))
+	})
 
 	mux.HandleFunc("/api/modules", auth.Protect(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -150,7 +156,12 @@ func main() {
 	mux.HandleFunc("/api/practice/vocabulary/save", auth.Protect(methodHandler("POST", practiceHandler.SaveVocabulary)))
 	mux.HandleFunc("/api/practice/mistakes", auth.Protect(methodHandler("GET", practiceHandler.GetMyMistakes)))
 	mux.HandleFunc("/api/autocomplete", auth.Protect(methodHandler("GET", dictionary.AutocompleteHandler)))
+<<<<<<< HEAD
 	// Маршрути для цілей (To-Do)
+=======
+
+	// --- МАРШРУТИ ДЛЯ ЦІЛЕЙ (TO-DO) ---
+>>>>>>> 7dbb58520f0608413d58b131d2aaf3008ba3bf10
 	mux.HandleFunc("/api/profile/goals", auth.Protect(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -165,6 +176,7 @@ func main() {
 			http.Error(w, "Метод заборонено", http.StatusMethodNotAllowed)
 		}
 	}))
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
