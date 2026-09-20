@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Loader2, CheckCircle, XCircle, ArrowRight, Brain, RotateCcw, Info } from 'lucide-react';
 

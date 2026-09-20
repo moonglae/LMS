@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { apiFetch } from '../api';
 
 export interface User {
     id: number;

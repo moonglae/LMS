@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShieldAlert, Users, Ban, CheckCircle, Unlock, MessageSquareOff, X } from 'lucide-react';
+import { ShieldAlert, Users, Ban, CheckCircle, Unlock, X } from 'lucide-react';
 
 interface Alert {
     id: number;
