@@ -18,7 +18,6 @@ type GenerateTestRequest struct {
 	QuestionCount int    `json:"question_count"`
 }
 
-// НОВА СТРУКТУРА: Загальна відповідь від ШІ
 type AITestResponse struct {
 	Rules     []string         `json:"rules"`
 	Questions []AITestQuestion `json:"questions"`
@@ -40,12 +39,11 @@ func (h *Handler) GenerateAITest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. ПЕРЕВІРКА ОБМЕЖЕНЬ АДМІНІСТРАТОРА
+	// 2. ПЕРЕВІРКА ОБМЕЖЕНЬ АДМІНІСТРАТОРА (Виправлено ключ на "ai_chat")
 	var restrictedFeatures string
 	err := h.DB.QueryRow("SELECT COALESCE(restricted_features::text, '{}') FROM users WHERE id = $1", userID).Scan(&restrictedFeatures)
 	if err == nil {
-		if strings.Contains(restrictedFeatures, `"chat": true`) || strings.Contains(restrictedFeatures, `"chat":true`) {
-			// Ви можете зробити окремий ключ "test", але тут ми блокуємо весь AI за ключем "chat"
+		if strings.Contains(restrictedFeatures, `"ai_chat": true`) || strings.Contains(restrictedFeatures, `"ai_chat":true`) {
 			auth.LogSecurityAlert(h.DB, userID, "blocked_feature_access", "Спроба згенерувати тест заблокованим користувачем")
 			http.Error(w, `{"error": "Генерація за допомогою AI заблокована для вашого акаунту"}`, http.StatusForbidden)
 			return
@@ -86,8 +84,6 @@ func (h *Handler) GenerateAITest(w http.ResponseWriter, r *http.Request) {
 		theoryBlock = "Теоретичний матеріал не надано. Використовуй свої знання загальних правил англійської граматики для цієї теми."
 	}
 
-	// ОНОВЛЕНИЙ ПРОМПТ: Просимо генерувати правила (rules)
-	// 4. Формуємо професійний Prompt без хардкод-прикладів
 	systemPrompt := fmt.Sprintf(`Ти — провідний методист та експерт зі створення інтерактивних навчальних матеріалів з англійської мови.
 Твоє завдання — згенерувати тест на тему: "%s".
 %s
@@ -173,7 +169,6 @@ func (h *Handler) GenerateAITest(w http.ResponseWriter, r *http.Request) {
 
 	aiGeneratedJSON := geminiResp.Candidates[0].Content.Parts[0].Text
 
-	// ЗМІНА ТУТ: Парсимо у нову структуру AITestResponse
 	var finalResponse AITestResponse
 	if err := json.Unmarshal([]byte(aiGeneratedJSON), &finalResponse); err != nil {
 		log.Printf("ШІ повернув невалідний формат даних: %s", aiGeneratedJSON)
