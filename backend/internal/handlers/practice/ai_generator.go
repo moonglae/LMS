@@ -1,6 +1,7 @@
 package practice
 
 import (
+	"backend/internal/handlers/auth"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -33,6 +34,23 @@ type AITestQuestion struct {
 
 func (h *Handler) GenerateAITest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	userID, ok := auth.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, `{"error": "Неавторизований доступ"}`, http.StatusUnauthorized)
+		return
+	}
+
+	// 2. ПЕРЕВІРКА ОБМЕЖЕНЬ АДМІНІСТРАТОРА
+	var restrictedFeatures string
+	err := h.DB.QueryRow("SELECT COALESCE(restricted_features::text, '{}') FROM users WHERE id = $1", userID).Scan(&restrictedFeatures)
+	if err == nil {
+		if strings.Contains(restrictedFeatures, `"chat": true`) || strings.Contains(restrictedFeatures, `"chat":true`) {
+			// Ви можете зробити окремий ключ "test", але тут ми блокуємо весь AI за ключем "chat"
+			auth.LogSecurityAlert(h.DB, userID, "blocked_feature_access", "Спроба згенерувати тест заблокованим користувачем")
+			http.Error(w, `{"error": "Генерація за допомогою AI заблокована для вашого акаунту"}`, http.StatusForbidden)
+			return
+		}
+	}
 
 	var req GenerateTestRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

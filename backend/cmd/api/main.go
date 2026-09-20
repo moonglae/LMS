@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"backend/internal/database"
+	"backend/internal/handlers/admin"
 	"backend/internal/handlers/analytics"
 	"backend/internal/handlers/auth"
 	"backend/internal/handlers/content"
@@ -63,11 +64,12 @@ func main() {
 		log.Fatalf("Критична помилка БД: %v", err)
 	}
 	defer db.Close()
-	
+
 	dictionary, err := practice.LoadDictionary("english.json")
 	if err != nil {
 		log.Fatalf("Помилка завантаження словника: %v", err)
 	}
+	adminH := admin.NewAdminHandler(db)
 
 	authH := auth.NewAuthHandler(db)
 	contentH := content.NewContentHandler(db)
@@ -81,15 +83,15 @@ func main() {
 	mux.HandleFunc("/api/auth/register", methodHandler("POST", authH.Register))
 	mux.HandleFunc("/api/auth/login", methodHandler("POST", authH.Login))
 
-	// --- ЗАХИЩЕНІ МАРШРУТИ ---
-	mux.HandleFunc("/api/me", auth.Protect(methodHandler("GET", userH.GetMe)))
-	
 	mux.HandleFunc("/api/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("pong"))
 	})
 
-	mux.HandleFunc("/api/modules", auth.Protect(func(w http.ResponseWriter, r *http.Request) {
+	// --- ЗАХИЩЕНІ МАРШРУТИ (додано db як перший аргумент до auth.Protect) ---
+	mux.HandleFunc("/api/me", auth.Protect(db, methodHandler("GET", userH.GetMe)))
+
+	mux.HandleFunc("/api/modules", auth.Protect(db, func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			contentH.GetModules(w, r)
@@ -100,7 +102,7 @@ func main() {
 		}
 	}))
 
-	mux.HandleFunc("/api/modules/", auth.Protect(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/modules/", auth.Protect(db, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut {
 			contentH.UpdateModule(w, r)
 		} else {
@@ -108,7 +110,7 @@ func main() {
 		}
 	}))
 
-	mux.HandleFunc("/api/modules/flashcards", auth.Protect(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/modules/flashcards", auth.Protect(db, func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			contentH.GetFlashcards(w, r)
@@ -119,10 +121,10 @@ func main() {
 		}
 	}))
 
-	mux.HandleFunc("/api/modules/students", auth.Protect(methodHandler("GET", contentH.GetModuleStudents)))
-	mux.HandleFunc("/api/modules/enroll", auth.Protect(methodHandler("POST", contentH.EnrollStudent)))
+	mux.HandleFunc("/api/modules/students", auth.Protect(db, methodHandler("GET", contentH.GetModuleStudents)))
+	mux.HandleFunc("/api/modules/enroll", auth.Protect(db, methodHandler("POST", contentH.EnrollStudent)))
 
-	mux.HandleFunc("/api/quizzes", auth.Protect(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/quizzes", auth.Protect(db, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			contentH.GetQuizzes(w, r)
 		} else {
@@ -130,39 +132,47 @@ func main() {
 		}
 	}))
 
-	mux.HandleFunc("/api/quizzes/questions", auth.Protect(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/quizzes/questions", auth.Protect(db, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			contentH.GetQuizQuestions(w, r)
 		} else {
 			contentH.CreateQuestion(w, r)
 		}
 	}))
-	mux.HandleFunc("/api/generate-quiz", auth.Protect(methodHandler("GET", contentH.GenerateQuiz)))
+	mux.HandleFunc("/api/generate-quiz", auth.Protect(db, methodHandler("GET", contentH.GenerateQuiz)))
 
 	// --- АНАЛІТИКА ТА ПРОФІЛЬ ---
-	mux.HandleFunc("/api/analytics/quiz/submit", auth.Protect(methodHandler("POST", analyticsH.SubmitQuizAttempt)))
-	mux.HandleFunc("/api/analytics/summary", auth.Protect(methodHandler("GET", analyticsH.GetSummary)))
-	mux.HandleFunc("/api/analytics/mistakes", auth.Protect(methodHandler("GET", analyticsH.GetActiveMistakes)))
-	mux.HandleFunc("/api/analytics/mistakes/resolve", auth.Protect(methodHandler("POST", analyticsH.ResolveMistake)))
-	mux.HandleFunc("/api/analytics/mistakes-quiz", auth.Protect(methodHandler("GET", analyticsH.GetMistakesQuiz)))
-	mux.HandleFunc("/api/analytics/progress", auth.Protect(methodHandler("GET", analyticsH.GetProgressData)))
-	mux.HandleFunc("/api/profile/stats", auth.Protect(methodHandler("GET", analyticsH.GetProfileStats)))
+	mux.HandleFunc("/api/analytics/quiz/submit", auth.Protect(db, methodHandler("POST", analyticsH.SubmitQuizAttempt)))
+	mux.HandleFunc("/api/analytics/summary", auth.Protect(db, methodHandler("GET", analyticsH.GetSummary)))
+	mux.HandleFunc("/api/analytics/mistakes", auth.Protect(db, methodHandler("GET", analyticsH.GetActiveMistakes)))
+	mux.HandleFunc("/api/analytics/mistakes/resolve", auth.Protect(db, methodHandler("POST", analyticsH.ResolveMistake)))
+	mux.HandleFunc("/api/analytics/mistakes-quiz", auth.Protect(db, methodHandler("GET", analyticsH.GetMistakesQuiz)))
+	mux.HandleFunc("/api/analytics/progress", auth.Protect(db, methodHandler("GET", analyticsH.GetProgressData)))
+	mux.HandleFunc("/api/profile/stats", auth.Protect(db, methodHandler("GET", analyticsH.GetProfileStats)))
+	mux.HandleFunc("/api/profile/update", auth.Protect(db, methodHandler("POST", authH.UpdateProfile)))
+	mux.HandleFunc("/api/profile/password", auth.Protect(db, methodHandler("POST", authH.UpdatePassword)))
 
 	// --- ПРАКТИКА ТА АВТОКОМПЛІТ ---
-	// --- ПРАКТИКА ТА АВТОКОМПЛІТ ---
-	mux.HandleFunc("/api/practice/chat", auth.Protect(methodHandler("POST", practiceHandler.ChatWithAI)))
-	mux.HandleFunc("/api/practice/generate-test", auth.Protect(methodHandler("POST", practiceHandler.GenerateAITest)))
-	mux.HandleFunc("/api/practice/mistakes/save", auth.Protect(methodHandler("POST", practiceHandler.SaveMistake)))
-	mux.HandleFunc("/api/practice/vocabulary/save", auth.Protect(methodHandler("POST", practiceHandler.SaveVocabulary)))
-	mux.HandleFunc("/api/practice/mistakes", auth.Protect(methodHandler("GET", practiceHandler.GetMyMistakes)))
-	mux.HandleFunc("/api/autocomplete", auth.Protect(methodHandler("GET", dictionary.AutocompleteHandler)))
-<<<<<<< HEAD
-	// Маршрути для цілей (To-Do)
-=======
+	mux.HandleFunc("/api/practice/chat", auth.Protect(db, methodHandler("POST", practiceHandler.ChatWithAI)))
+	mux.HandleFunc("/api/practice/generate-test", auth.Protect(db, methodHandler("POST", practiceHandler.GenerateAITest)))
+	mux.HandleFunc("/api/practice/mistakes/save", auth.Protect(db, methodHandler("POST", practiceHandler.SaveMistake)))
+	mux.HandleFunc("/api/practice/vocabulary/save", auth.Protect(db, methodHandler("POST", practiceHandler.SaveVocabulary)))
+	mux.HandleFunc("/api/practice/mistakes", auth.Protect(db, methodHandler("GET", practiceHandler.GetMyMistakes)))
+	mux.HandleFunc("/api/autocomplete", auth.Protect(db, methodHandler("GET", dictionary.AutocompleteHandler)))
+
+	// --- ПАНЕЛЬ АДМІНІСТРАТОРА ---
+
+	// 1. Отримання даних для таблиць
+	mux.HandleFunc("/api/admin/users", auth.Protect(db, auth.AdminOnly(db, methodHandler("GET", adminH.GetUsers))))
+	mux.HandleFunc("/api/admin/alerts", auth.Protect(db, auth.AdminOnly(db, methodHandler("GET", adminH.GetSecurityAlerts))))
+
+	// 2. Дії над користувачами та логами
+	mux.HandleFunc("/api/admin/alerts/resolve", auth.Protect(db, auth.AdminOnly(db, methodHandler("POST", adminH.ResolveAlert))))
+	mux.HandleFunc("/api/admin/users/ban", auth.Protect(db, auth.AdminOnly(db, methodHandler("POST", adminH.BanUser))))
+	mux.HandleFunc("/api/admin/users/restrict", auth.Protect(db, auth.AdminOnly(db, methodHandler("POST", adminH.RestrictFeature))))
 
 	// --- МАРШРУТИ ДЛЯ ЦІЛЕЙ (TO-DO) ---
->>>>>>> 7dbb58520f0608413d58b131d2aaf3008ba3bf10
-	mux.HandleFunc("/api/profile/goals", auth.Protect(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/profile/goals", auth.Protect(db, func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			analyticsH.GetGoals(w, r)

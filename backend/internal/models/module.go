@@ -1,14 +1,28 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // User представляє користувача системи
 type User struct {
+	ID                 int             `json:"id"`
+	Email              string          `json:"email"`
+	PasswordHash       string          `json:"-"` // Завдяки "-" хеш пароля НІКОЛИ не потрапить у JSON-відповідь на фронтенд
+	FirstName          string          `json:"first_name"`
+	LastName           string          `json:"last_name"`
+	Role               string          `json:"role"`      // Роль (admin/student)
+	IsBanned           bool            `json:"is_banned"` // Статус блокування (потрібен для адмінки)
+	CreatedAt          time.Time       `json:"created_at"`
+	RestrictedFeatures json.RawMessage `json:"restricted_features"` // Зберігає JSON: {"chat": true}
+}
+type SecurityAlert struct {
 	ID           int       `json:"id"`
-	Email        string    `json:"email"`
-	PasswordHash string    `json:"-"` // Завдяки "-" хеш пароля НІКОЛИ не потрапить у JSON-відповідь на фронтенд
-	FirstName    string    `json:"first_name"`
-	LastName     string    `json:"last_name"`
+	UserID       int       `json:"user_id"`
+	ActivityType string    `json:"activity_type"`
+	Description  string    `json:"description"`
+	Resolved     bool      `json:"resolved"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 

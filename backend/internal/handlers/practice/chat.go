@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 )
 
 // --- 1. СТРУКТУРИ ДЛЯ НАШОГО ФРОНТЕНДУ (REACT) ---
@@ -67,6 +68,16 @@ func (h *Handler) ChatWithAI(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		http.Error(w, `{"error": "Неавторизований доступ"}`, http.StatusUnauthorized)
 		return
+	}
+	var restrictedFeatures string
+	err := h.DB.QueryRow("SELECT COALESCE(restricted_features::text, '{}') FROM users WHERE id = $1", userID).Scan(&restrictedFeatures)
+	if err == nil {
+		if strings.Contains(restrictedFeatures, `"chat": true`) || strings.Contains(restrictedFeatures, `"chat":true`) {
+			// Якщо адміністратор вимкнув чат, відкидаємо запит
+			auth.LogSecurityAlert(h.DB, userID, "blocked_feature_access", "Спроба використати заблокований AI-чат")
+			http.Error(w, `{"error": "Функція AI-чату заблокована для вашого акаунту"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	// Крок 2. Читаємо повідомлення від фронтенду

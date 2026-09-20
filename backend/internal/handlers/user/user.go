@@ -17,12 +17,15 @@ func NewUserHandler(db *sql.DB) *UserHandler {
 	return &UserHandler{DB: db}
 }
 
-// UserData відповідає структурі вашої бази даних
+// UserData відповідає структурі бази даних
 type UserData struct {
 	ID        int       `json:"id"`
 	Email     string    `json:"email"`
 	FirstName string    `json:"first_name"`
 	LastName  string    `json:"last_name"`
+	Role      string    `json:"role"`
+	IsBanned  bool      `json:"is_banned"`  // Обов'язково
+	BanReason string    `json:"ban_reason"` // Обов'язково
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -38,10 +41,10 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 
 	var u UserData
 	err := h.DB.QueryRow(`
-		SELECT id, email, first_name, last_name, created_at 
-		FROM users 
-		WHERE id = $1`, userID).Scan(
-		&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.CreatedAt,
+        SELECT id, email, first_name, last_name, role, is_banned, COALESCE(ban_reason, ''), created_at 
+        FROM users 
+        WHERE id = $1`, userID).Scan(
+		&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.Role, &u.IsBanned, &u.BanReason, &u.CreatedAt,
 	)
 
 	if err != nil {

@@ -19,10 +19,14 @@ func NewAuthHandler(db *sql.DB) *AuthHandler {
 	return &AuthHandler{DB: db}
 }
 
-// Структури для прийому JSON від фронтенду
 type RegisterRequest struct {
 	Email     string `json:"email"`
 	Password  string `json:"password"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+}
+
+type UpdateProfileRequest struct {
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
 }
@@ -37,23 +41,17 @@ type UserResponse struct {
 	Email     string `json:"email"`
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
+	Role      string `json:"role"`
+	IsBanned  bool   `json:"is_banned"`
+	BanReason string `json:"ban_reason"`
 }
 
-// Register створює нового користувача
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// 1. Читаємо JSON з тіла запиту
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error": "Некоректний формат даних"}`, http.StatusBadRequest)
-		return
-	}
-
-	// 2. Хешуємо пароль (ніколи не зберігаємо паролі у відкритому вигляді!)
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		http.Error(w, `{"error": "Помилка шифрування пароля"}`, http.StatusInternalServerError)
 		return
 	}
 
@@ -62,19 +60,22 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. Зберігаємо в PostgreSQL
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, `{"error": "Помилка шифрування пароля"}`, http.StatusInternalServerError)
+		return
+	}
+
 	query := `INSERT INTO users (email, password_hash, first_name, last_name) 
-	          VALUES ($1, $2, $3, $4) RETURNING id`
-	
+			  VALUES ($1, $2, $3, $4) RETURNING id`
+
 	var newUserID int
 	err = h.DB.QueryRow(query, req.Email, string(hashedPassword), req.FirstName, req.LastName).Scan(&newUserID)
 	if err != nil {
-		// Якщо такий email вже є в базі, Postgres видасть помилку унікальності
 		http.Error(w, `{"error": "Користувач з таким email вже існує або сталася помилка БД"}`, http.StatusConflict)
 		return
 	}
 
-	// 4. Повертаємо успішну відповідь
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message": "Реєстрація успішна",
@@ -82,7 +83,77 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Login перевіряє дані та видає JWT-токен
+func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	userID, ok := GetUserID(r.Context())
+	if !ok {
+		http.Error(w, `{"error": "Неавторизований доступ"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var req UpdateProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error": "Некоректний формат"}`, http.StatusBadRequest)
+		return
+	}
+
+	_, err := h.DB.Exec("UPDATE users SET first_name = $1, last_name = $2 WHERE id = $3", req.FirstName, req.LastName, userID)
+	if err != nil {
+		http.Error(w, `{"error": "Помилка оновлення профілю"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"message": "Дані успішно оновлено"}`))
+}
+
+type UpdatePasswordRequest struct {
+	OldPassword string `json:"old_password"`
+	NewPassword string `json:"new_password"`
+}
+
+func (h *AuthHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
+	userID, ok := GetUserID(r.Context())
+	if !ok {
+		http.Error(w, `{"error": "Неавторизований доступ"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var req UpdatePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error": "Некоректний формат"}`, http.StatusBadRequest)
+		return
+	}
+
+	var currentHash string
+	err := h.DB.QueryRow("SELECT password_hash FROM users WHERE id = $1", userID).Scan(&currentHash)
+	if err != nil {
+		http.Error(w, `{"error": "Помилка сервера"}`, http.StatusInternalServerError)
+		return
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(req.OldPassword))
+	if err != nil {
+		LogSecurityAlert(h.DB, userID, "failed_password_change", "Невдала спроба зміни пароля (невірний старий пароль)")
+		http.Error(w, `{"error": "Невірний поточний пароль"}`, http.StatusForbidden)
+		return
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, `{"error": "Помилка шифрування"}`, http.StatusInternalServerError)
+		return
+	}
+
+	_, err = h.DB.Exec("UPDATE users SET password_hash = $1 WHERE id = $2", newHash, userID)
+	if err != nil {
+		http.Error(w, `{"error": "Помилка збереження пароля"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"message": "Пароль успішно змінено"}`))
+}
+
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -92,15 +163,15 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Шукаємо користувача за email
 	var storedHash string
-	var userID int
-	var firstName string
-	var lastName string
-	var email string
+	var user UserResponse
 
-	query := `SELECT id, password_hash, first_name, last_name, email FROM users WHERE email = $1`
-	err := h.DB.QueryRow(query, req.Email).Scan(&userID, &storedHash, &firstName, &lastName, &email)
+	// Витягуємо також is_banned та ban_reason
+	query := `SELECT id, password_hash, first_name, last_name, email, role, is_banned, COALESCE(ban_reason, '') 
+	          FROM users WHERE email = $1`
+	err := h.DB.QueryRow(query, req.Email).Scan(
+		&user.ID, &storedHash, &user.FirstName, &user.LastName, &user.Email, &user.Role, &user.IsBanned, &user.BanReason,
+	)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, `{"error": "Невірний email або пароль"}`, http.StatusUnauthorized)
@@ -110,16 +181,16 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Порівнюємо пароль із хешем із бази
 	err = bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(req.Password))
 	if err != nil {
+		LogSecurityAlert(h.DB, user.ID, "failed_login", "Невдала спроба входу (невірний пароль)")
 		http.Error(w, `{"error": "Невірний email або пароль"}`, http.StatusUnauthorized)
 		return
 	}
 
-	// 3. Генеруємо JWT-токен
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub":  userID,
+		"sub":  user.ID,
+		"role": user.Role,
 		"exp":  time.Now().Add(time.Hour * 72).Unix(),
 	})
 
@@ -132,12 +203,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"token": tokenString,
-		"user": UserResponse{
-			ID:        userID,
-			Email:     email,
-			FirstName: firstName,
-			LastName:  lastName,
-		},
+		"user":  user,
 	})
 }
 
@@ -151,8 +217,12 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user UserResponse
-	query := `SELECT id, email, first_name, last_name FROM users WHERE id = $1`
-	err := h.DB.QueryRow(query, userID).Scan(&user.ID, &user.Email, &user.FirstName, &user.LastName)
+	// Додано перевірку is_banned та ban_reason
+	query := `SELECT id, email, first_name, last_name, role, is_banned, COALESCE(ban_reason, '') 
+	          FROM users WHERE id = $1`
+	err := h.DB.QueryRow(query, userID).Scan(
+		&user.ID, &user.Email, &user.FirstName, &user.LastName, &user.Role, &user.IsBanned, &user.BanReason,
+	)
 	if err != nil {
 		http.Error(w, `{"error": "Помилка отримання даних користувача"}`, http.StatusInternalServerError)
 		return

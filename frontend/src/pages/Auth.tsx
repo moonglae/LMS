@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     BookOpen,
     Mail,
@@ -11,18 +12,21 @@ import { apiFetch } from '../api';
 
 export default function Auth() {
     const [isLogin, setIsLogin] = useState(true);
+    const navigate = useNavigate();
 
     // Стани для форми
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [firstName, setFirstName] = useState('');
-    const [lastName, setLastName] = useState(''); // ДОДАНО
+    const [lastName, setLastName] = useState('');
 
     // Стани для UI
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // ДІСТАЄМО ОБИДВІ ФУНКЦІЇ ЗІ СТОРА:
     const setToken = useAuthStore((state) => state.setToken);
+    const setUser = useAuthStore((state) => state.setUser); // ДОДАНО
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -37,20 +41,29 @@ export default function Auth() {
                 });
 
                 if (data && typeof data.token === 'string') {
+                    // Зберігаємо токен і користувача
                     localStorage.setItem('token', data.token);
                     setToken(data.token);
+                    setUser(data.user); // ТЕПЕР ПРАЦЮВАТИМЕ
+
+                    const userRole = data.user?.role;
+
+                    if (userRole === 'admin') {
+                        navigate('/admin');
+                    } else {
+                        navigate('/');
+                    }
                 } else {
                     throw new Error('Некоректна відповідь сервера');
                 }
             } else {
-                // Відправляємо реальне ім'я та прізвище
                 const data = await apiFetch('/auth/register', {
                     method: 'POST',
                     body: JSON.stringify({
                         email,
                         password,
                         first_name: firstName,
-                        last_name: lastName, // ВИКОРИСТОВУЄМО ЗМІННУ
+                        last_name: lastName,
                     }),
                 });
 
@@ -94,8 +107,6 @@ export default function Auth() {
                 <form onSubmit={handleSubmit} className="space-y-5">
                     {!isLogin && (
                         <>
-
-                            {/* Поля імені та прізвища */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="relative">
                                     <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted w-5 h-5" />

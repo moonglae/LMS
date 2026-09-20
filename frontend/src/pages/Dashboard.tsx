@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Book, Loader2, AlertCircle, KeyRound, Plus, Search, Bot, Sparkles } from 'lucide-react';
 import { apiFetch } from '../api';
 import type { Module } from '../types';
+import { useAuthStore } from '../store/authStore'; // ДОДАНО ІМПОРТ
 
 export default function Dashboard() {
     const navigate = useNavigate();
+    const user = useAuthStore((state) => state.user); // ДОДАНО ЮЗЕРА
 
     const [modules, setModules] = useState<Module[]>([]);
     const [userId, setUserId] = useState<number | null>(null);
@@ -15,6 +17,13 @@ export default function Dashboard() {
     const [enrollMsg, setEnrollMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
     const [searchQuery, setSearchQuery] = useState('');
+
+    // Якщо сюди потрапив адмін — відкидаємо в адмінку
+    useEffect(() => {
+        if (user?.role === 'admin') {
+            navigate('/admin', { replace: true });
+        }
+    }, [user, navigate]);
 
     const fetchDashboardData = async () => {
         try {
@@ -33,8 +42,11 @@ export default function Dashboard() {
     };
 
     useEffect(() => {
-        fetchDashboardData();
-    }, []);
+        // Завантажуємо дані тільки якщо це не адмін
+        if (user?.role !== 'admin') {
+            fetchDashboardData();
+        }
+    }, [user]);
 
     const handleEnroll = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -53,6 +65,11 @@ export default function Dashboard() {
         }
     };
 
+    // Блокування: не малюємо HTML дашборду для адміна
+    if (user?.role === 'admin') {
+        return null;
+    }
+
     if (isLoading) return <div className="flex justify-center mt-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
 
     const filteredModules = modules.filter(mod =>
@@ -70,7 +87,6 @@ export default function Dashboard() {
                     </p>
                 </div>
                 <div className="flex gap-3">
-                    {/* Нова кнопка для чату з ШІ */}
                     <button
                         onClick={() => navigate('/practice/chat')}
                         className="inline-flex shrink-0 items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-lg shadow-purple-500/20"
@@ -170,7 +186,6 @@ export default function Dashboard() {
                                     Тест
                                 </button>
 
-                                {/* Кнопка: ШІ Граматика */}
                                 <button
                                     onClick={() => navigate('/practice/ai-test', {
                                         state: {
