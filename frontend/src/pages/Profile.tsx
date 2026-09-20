@@ -55,6 +55,7 @@ export default function Profile() {
 
     const [oldPassword, setOldPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState(''); // ДОДАНО СТАН ДЛЯ ПІДТВЕРДЖЕННЯ
     const [passwordMessage, setPasswordMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
     const fetchProfileData = async (showMainLoader = true) => {
@@ -145,10 +146,18 @@ export default function Profile() {
 
     const handleUpdatePassword = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        // ДОДАНО ПЕРЕВІРКУ ПАРОЛІВ НА СПІВПАДІННЯ
+        if (newPassword !== confirmPassword) {
+            setPasswordMessage({ text: 'Нові паролі не співпадають!', type: 'error' });
+            return;
+        }
+
         if (newPassword.length < 6) {
             setPasswordMessage({ text: 'Новий пароль має містити щонайменше 6 символів', type: 'error' });
             return;
         }
+
         try {
             await apiFetch('/profile/password', {
                 method: 'POST',
@@ -158,6 +167,7 @@ export default function Profile() {
             setPasswordMessage({ text: 'Пароль успішно змінено', type: 'success' });
             setOldPassword('');
             setNewPassword('');
+            setConfirmPassword(''); // ОЧИЩЕННЯ ПІДТВЕРДЖЕННЯ ПАРОЛЯ
         } catch (error: any) {
             setPasswordMessage({ text: error.message || 'Невірний поточний пароль', type: 'error' });
         }
@@ -394,6 +404,17 @@ export default function Profile() {
                                             type="password"
                                             value={newPassword}
                                             onChange={(e) => setNewPassword(e.target.value)}
+                                            className="w-full bg-mainBg border border-surfaceBorder text-textMain rounded-xl px-4 py-2.5 focus:outline-none focus:border-orange-500 transition-colors"
+                                            required
+                                        />
+                                    </div>
+                                    {/* ДОДАНО ПОЛЕ ПІДТВЕРДЖЕННЯ ПАРОЛЯ */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-textMuted mb-1">Підтвердження нового пароля</label>
+                                        <input
+                                            type="password"
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
                                             className="w-full bg-mainBg border border-surfaceBorder text-textMain rounded-xl px-4 py-2.5 focus:outline-none focus:border-orange-500 transition-colors"
                                             required
                                         />
