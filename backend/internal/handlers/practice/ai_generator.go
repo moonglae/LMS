@@ -3,6 +3,7 @@ package practice
 import (
 	"backend/internal/handlers/auth"
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,7 +11,43 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
+	"time"
 )
+
+// --- АНТИСПАМ СИСТЕМА ДЛЯ ШІ ---
+var aiRequests sync.Map
+
+type aiRateLimitData struct {
+	Count     int
+	LastReset time.Time
+}
+
+// checkAILimitAndLog перевіряє, чи не перевищив користувач ліміт у 10 запитів/хв
+func checkAILimitAndLog(db *sql.DB, userID int) bool {
+	now := time.Now()
+	val, _ := aiRequests.LoadOrStore(userID, &aiRateLimitData{Count: 0, LastReset: now})
+	data := val.(*aiRateLimitData)
+
+	// Скидаємо лічильник щохвилини
+	if now.Sub(data.LastReset) > time.Minute {
+		data.Count = 0
+		data.LastReset = now
+	}
+
+	data.Count++
+
+	if data.Count > 5 { // ЛІМІТ: 5 запитів на хвилину
+		if data.Count == 6 {
+			// Логуємо тільки на 6-й раз, щоб не спамити базу логами
+			auth.LogSecurityAlert(db, userID, "ai_spam_attempt", "Аномально висока активність ШІ (>5 запитів/хв). Рекомендується заблокувати ШІ для цього користувача.")
+		}
+		return false // Ліміт перевищено
+	}
+	return true // Все ок
+}
+
+// ---------------------------------
 
 type GenerateTestRequest struct {
 	Topic         string `json:"topic"`
@@ -39,7 +76,7 @@ func (h *Handler) GenerateAITest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. ПЕРЕВІРКА ОБМЕЖЕНЬ АДМІНІСТРАТОРА (Виправлено ключ на "ai_chat")
+	// 1. ПЕРЕВІРКА ОБМЕЖЕНЬ АДМІНІСТРАТОРА
 	var restrictedFeatures string
 	err := h.DB.QueryRow("SELECT COALESCE(restricted_features::text, '{}') FROM users WHERE id = $1", userID).Scan(&restrictedFeatures)
 	if err == nil {
@@ -50,12 +87,22 @@ func (h *Handler) GenerateAITest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var req GenerateTestRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error": "Невірний формат запиту"}`, http.StatusBadRequest)
+	// 2. АНТИСПАМ ПЕРЕВІРКА ДЛЯ ШІ
+	if !checkAILimitAndLog(h.DB, userID) {
+		http.Error(w, `{"error": "Занадто багато запитів до ШІ. Будь ласка, зачекайте хвилину."}`, http.StatusTooManyRequests)
 		return
 	}
 
+	// 3. ЗАХИСТ ВІД JSON-БОМБ: Обмежуємо розмір тіла запиту до 1 МБ (1048576 байт)
+	r.Body = http.MaxBytesReader(w, r.Body, 1048576)
+
+	var req GenerateTestRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error": "Невірний формат запиту або перевищено ліміт об'єму (макс. 1MB)"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Базові перевірки значень
 	if req.QuestionCount < 1 {
 		req.QuestionCount = 5
 	} else if req.QuestionCount > 20 {
@@ -73,6 +120,8 @@ func (h *Handler) GenerateAITest(w http.ResponseWriter, r *http.Request) {
 
 	theory := strings.TrimSpace(req.Theory)
 	if len(theory) > 4000 {
+		// Якщо користувач намагається пропхати текст понад 4000 символів, відхиляємо і логуємо
+		auth.LogSecurityAlert(h.DB, userID, "payload_too_large", "Спроба відправити занадто великий текст теорії для ШІ (>4000 символів)")
 		http.Error(w, `{"error": "Текст теорії занадто довгий (макс. 4000 символів)"}`, http.StatusBadRequest)
 		return
 	}
