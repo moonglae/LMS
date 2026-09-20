@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ShieldAlert, Users, Ban, CheckCircle, Unlock, MessageSquareOff, X, Check } from 'lucide-react';
+import { apiFetch } from '../api';
 
 interface Alert {
     id: number;
@@ -30,8 +31,6 @@ const AdminDashboard = () => {
     const [userToBan, setUserToBan] = useState<number | null>(null);
     const [banReason, setBanReason] = useState("");
 
-    const getToken = () => localStorage.getItem('token');
-
     useEffect(() => {
         if (activeTab === 'alerts') fetchAlerts();
         if (activeTab === 'users') fetchUsers();
@@ -44,23 +43,21 @@ const AdminDashboard = () => {
 
     const fetchAlerts = async () => {
         try {
-            const res = await fetch('http://localhost:8080/api/admin/alerts', {
-                headers: { 'Authorization': `Bearer ${getToken()}` }
-            });
-            if (res.ok) setAlerts(await res.json() || []);
-        } catch (error) {
+            const data = await apiFetch('/admin/alerts');
+            setAlerts(data || []);
+        } catch (error: any) {
             console.error(error);
+            showMessage(error.message || 'Помилка завантаження алертів', 'error');
         }
     };
 
     const fetchUsers = async () => {
         try {
-            const res = await fetch('http://localhost:8080/api/admin/users', {
-                headers: { 'Authorization': `Bearer ${getToken()}` }
-            });
-            if (res.ok) setUsers(await res.json() || []);
-        } catch (error) {
+            const data = await apiFetch('/admin/users');
+            setUsers(data || []);
+        } catch (error: any) {
             console.error(error);
+            showMessage(error.message || 'Помилка завантаження користувачів', 'error');
         }
     };
 
@@ -76,60 +73,43 @@ const AdminDashboard = () => {
 
     const executeBan = async (userId: number, banStatus: boolean, reason: string) => {
         try {
-            const res = await fetch(`http://localhost:8080/api/admin/users/ban?id=${userId}`, {
+            await apiFetch(`/admin/users/ban?id=${userId}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
                 body: JSON.stringify({ ban: banStatus, reason: reason })
             });
 
-            if (res.ok) {
-                showMessage(`Користувача успішно ${banStatus ? 'забанено' : 'розбанено'}`, 'success');
-                fetchUsers();
-            } else {
-                const errorData = await res.json().catch(() => null);
-                showMessage(errorData?.error || 'Помилка оновлення статусу', 'error');
-            }
-        } catch (error) {
-            console.error(error);
+            showMessage(`Користувача успішно ${banStatus ? 'забанено' : 'розбанено'}`, 'success');
+            fetchUsers();
+        } catch (error: any) {
+            showMessage(error.message || 'Помилка оновлення статусу', 'error');
         } finally {
             setBanModalOpen(false);
         }
     };
 
-    // Тепер функція використовується в таблиці користувачів
     const handleRestrictFeature = async (userId: number, feature: string, lockStatus: boolean) => {
         try {
-            const res = await fetch(`http://localhost:8080/api/admin/users/restrict?id=${userId}`, {
+            await apiFetch(`/admin/users/restrict?id=${userId}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
                 body: JSON.stringify({ feature, lock: lockStatus })
             });
 
-            if (res.ok) {
-                showMessage(`Обмеження для користувача оновлено`, 'success');
-                fetchUsers();
-            } else {
-                const errorData = await res.json().catch(() => null);
-                showMessage(errorData?.error || 'Помилка оновлення обмежень', 'error');
-            }
-        } catch (error) {
-            console.error(error);
+            showMessage(`Обмеження для користувача оновлено`, 'success');
+            fetchUsers();
+        } catch (error: any) {
+            showMessage(error.message || 'Помилка оновлення обмежень', 'error');
         }
     };
 
-    // Тепер функція використовується в таблиці алертів
     const handleResolveAlert = async (alertId: number) => {
         try {
-            const res = await fetch(`http://localhost:8080/api/admin/alerts/resolve?id=${alertId}`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${getToken()}` }
+            await apiFetch(`/admin/alerts/resolve?id=${alertId}`, {
+                method: 'POST'
             });
-            if (res.ok) {
-                setAlerts(alerts.filter(a => a.id !== alertId));
-                showMessage('Алерт позначено як вирішений', 'success');
-            }
-        } catch (error) {
-            console.error("Помилка:", error);
+            setAlerts(alerts.filter(a => a.id !== alertId));
+            showMessage('Алерт позначено як вирішений', 'success');
+        } catch (error: any) {
+            showMessage(error.message || 'Помилка вирішення алерта', 'error');
         }
     };
 
@@ -190,7 +170,6 @@ const AdminDashboard = () => {
                                                 )}
                                             </td>
                                             <td className="p-4 flex justify-end gap-2">
-                                                {/* Кнопка обмеження чату */}
                                                 {!isAdmin && (
                                                     <button 
                                                         onClick={() => handleRestrictFeature(u.id, 'chat', !isChatRestricted)}
@@ -201,7 +180,6 @@ const AdminDashboard = () => {
                                                     </button>
                                                 )}
 
-                                                {/* Кнопки бану / розбану */}
                                                 {u.is_banned ? (
                                                     <button onClick={() => handleBanClick(u.id, false)} disabled={isAdmin} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors ${isAdmin ? 'opacity-50 cursor-not-allowed bg-surfaceBorder' : 'bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/20'}`}>
                                                         <Unlock className="w-4 h-4" /> Розбанити
@@ -242,7 +220,6 @@ const AdminDashboard = () => {
                                         <td className="p-4 text-textMuted">{alert.description}</td>
                                         <td className="p-4 text-textMuted text-xs">{new Date(alert.created_at).toLocaleString()}</td>
                                         <td className="p-4 flex justify-end">
-                                            {/* Кнопка вирішення алерта */}
                                             <button 
                                                 onClick={() => handleResolveAlert(alert.id)}
                                                 className="flex items-center gap-1 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium"
@@ -258,7 +235,6 @@ const AdminDashboard = () => {
                 )}
             </div>
 
-            {/* Модальне вікно бану */}
             {banModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-surface border border-surfaceBorder rounded-2xl p-6 w-full max-w-md shadow-2xl">
