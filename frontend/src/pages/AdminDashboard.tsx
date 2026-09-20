@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShieldAlert, Users, Ban, CheckCircle, Unlock, X, Check } from 'lucide-react';
-import { apiFetch } from '../api';
+import { ShieldAlert, Users, Ban, CheckCircle, Unlock, X } from 'lucide-react';
 
 interface Alert {
     id: number;
@@ -17,6 +16,7 @@ interface User {
     last_name: string;
     role: string;
     is_banned: boolean;
+    restricted_features: string;
 }
 
 const AdminDashboard = () => {
@@ -84,8 +84,28 @@ const AdminDashboard = () => {
         } catch (error: any) {
             showMessage(error.message || 'Помилка оновлення статусу', 'error');
         } finally {
-            setLoadingUserId(null);
-            setBanModalOpen(false);
+            setBanModalOpen(false); // Закриваємо вікно
+        }
+    };
+
+    const handleRestrictFeature = async (userId: number, feature: string, lockStatus: boolean) => {
+        // ... (твій код без змін)
+        try {
+            const res = await fetch(`http://localhost:8080/api/admin/users/restrict?id=${userId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+                body: JSON.stringify({ feature, lock: lockStatus })
+            });
+
+            if (res.ok) {
+                showMessage(`Чат для користувача ${userId} ${lockStatus ? 'вимкнено' : 'увімкнено'}`, 'success');
+                fetchUsers();
+            } else {
+                const errorData = await res.json().catch(() => null);
+                showMessage(errorData?.error || 'Помилка оновлення обмежень', 'error');
+            }
+        } catch (error) {
+            console.error(error);
         }
     };
 
@@ -94,10 +114,12 @@ const AdminDashboard = () => {
             await apiFetch(`/admin/alerts/resolve?id=${alertId}`, {
                 method: 'POST'
             });
-            setAlerts(alerts.filter(a => a.id !== alertId));
-            showMessage('Алерт позначено як вирішений', 'success');
-        } catch (error: any) {
-            showMessage(error.message || 'Помилка вирішення алерта', 'error');
+            if (res.ok) {
+                setAlerts(alerts.filter(a => a.id !== alertId));
+                showMessage('Алерт позначено як вирішений', 'success');
+            }
+        } catch (error) {
+            console.error("Помилка:", error);
         }
     };
 
@@ -133,12 +155,15 @@ const AdminDashboard = () => {
                                     <th className="p-4 font-medium">Email</th>
                                     <th className="p-4 font-medium">Роль</th>
                                     <th className="p-4 font-medium">Статус</th>
+                                    <th className="p-4 font-medium text-center">Обмеження ШІ</th>
                                     <th className="p-4 font-medium text-right">Дії</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-surfaceBorder">
                                 {users.map(u => {
                                     const isAdmin = u.role === 'admin';
+                                    const aiLocked = isFeatureLocked(u.restricted_features, 'ai_chat');
+
                                     return (
                                         <tr key={u.id} className="hover:bg-mainBg/30 transition-colors text-textMain text-sm">
                                             <td className="p-4">{u.id}</td>
@@ -156,31 +181,15 @@ const AdminDashboard = () => {
                                                     <span className="flex items-center gap-1 text-green-400"><CheckCircle className="w-3 h-3" /> Активний</span>
                                                 )}
                                             </td>
-                                            <td className="p-4 flex justify-end gap-2 items-center">
-                                                {/* Динамічна кнопка бану / розбану */}
+                                            <td className="p-4 flex justify-end gap-2">
+                                                {/* КНОПКИ БАНУ З ВИКЛИКОМ НОВОЇ ФУНКЦІЇ */}
                                                 {u.is_banned ? (
-                                                    <button
-                                                        onClick={() => handleBanClick(u.id, false)}
-                                                        disabled={isAdmin || loadingUserId === u.id}
-                                                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition-all text-xs font-semibold ${isAdmin
-                                                                ? 'opacity-50 cursor-not-allowed bg-surfaceBorder text-textMuted'
-                                                                : 'bg-green-500/15 text-green-400 hover:bg-green-500/25 border border-green-500/30 shadow-sm'
-                                                            }`}
-                                                    >
-                                                        <Unlock className={`w-3.5 h-3.5 ${loadingUserId === u.id ? 'animate-spin' : ''}`} />
-                                                        {loadingUserId === u.id ? 'Оновлення...' : 'Розбанити'}
+                                                    <button onClick={() => handleBanClick(u.id, false)} disabled={isAdmin} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors ${isAdmin ? 'opacity-50 cursor-not-allowed bg-surfaceBorder' : 'bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/20'}`}>
+                                                        <Unlock className="w-4 h-4" /> Розбанити
                                                     </button>
                                                 ) : (
-                                                    <button
-                                                        onClick={() => handleBanClick(u.id, true)}
-                                                        disabled={isAdmin || loadingUserId === u.id}
-                                                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition-all text-xs font-semibold ${isAdmin
-                                                                ? 'opacity-50 cursor-not-allowed bg-surfaceBorder text-textMuted'
-                                                                : 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 shadow-sm'
-                                                            }`}
-                                                    >
-                                                        <Ban className={`w-3.5 h-3.5 ${loadingUserId === u.id ? 'animate-spin' : ''}`} />
-                                                        {loadingUserId === u.id ? 'Оновлення...' : 'Забанити'}
+                                                    <button onClick={() => handleBanClick(u.id, true)} disabled={isAdmin} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors ${isAdmin ? 'opacity-50 cursor-not-allowed bg-surfaceBorder' : 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20'}`}>
+                                                        <Ban className="w-4 h-4" /> Забанити
                                                     </button>
                                                 )}
                                             </td>
