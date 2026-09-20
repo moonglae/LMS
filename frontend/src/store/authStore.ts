@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { apiFetch } from '../api';
 
 export interface User {
     id: number;
@@ -47,35 +48,33 @@ export const useAuthStore = create<AuthState>((set) => ({
         }
 
         try {
-            // Робимо прямий fetch на /me, щоб перехопити 403 і забрати дані з помилки або запиту
-            const response = await fetch('http://localhost:8080/api/me', {
-                headers: { 'Authorization': `Bearer ${token}` }
+            // Використовуємо apiFetch, щоб запит автоматично йшов на правильний BASE_URL бекенду
+            const userData = await apiFetch('/me');
+            set({
+                user: userData,
+                isAuthenticated: true,
+                isCheckingAuth: false,
             });
-
-            if (response.status === 403) {
-                // Навіть якщо 403, спробуємо витягнути дані юзера (якщо бекенд їх віддає) або просто активувати бан
-                const errorData = await response.json().catch(() => null);
-
-                // Якщо бекенд повернув дані або ми знаємо, що він забанений
+        } catch (error: any) {
+            // Якщо сервер повернув 403 (бан), apiFetch може викинути помилку або містити статус
+            // Перевіримо, чи забанений користувач
+            if (error.status === 403 || error.message?.includes('banned')) {
                 set({
-                    user: errorData?.user || { is_banned: true, ban_reason: errorData?.error || 'Обмежено адміністратором' },
+                    user: {
+                        id: 0,
+                        email: '',
+                        first_name: '',
+                        last_name: '',
+                        role: 'user',
+                        is_banned: true,
+                        ban_reason: error.message || 'Обмежено адміністратором'
+                    },
                     isAuthenticated: true,
                     isCheckingAuth: false,
                 });
                 return;
             }
 
-            if (!response.ok) {
-                throw new Error('Unauthorized');
-            }
-
-            const userData = await response.json();
-            set({
-                user: userData,
-                isAuthenticated: true,
-                isCheckingAuth: false,
-            });
-        } catch (error) {
             localStorage.removeItem('token');
             set({
                 token: null,
