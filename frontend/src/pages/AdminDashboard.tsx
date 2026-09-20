@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShieldAlert, Users, Ban, CheckCircle, Unlock, X, Check } from 'lucide-react';
+import { ShieldAlert, Users, Ban, CheckCircle, Unlock, X, Check, Bot, Lock } from 'lucide-react';
 import { apiFetch } from '../api';
 
 interface Alert {
@@ -17,6 +17,7 @@ interface User {
     last_name: string;
     role: string;
     is_banned: boolean;
+    restricted_features: string;
 }
 
 const AdminDashboard = () => {
@@ -25,7 +26,6 @@ const AdminDashboard = () => {
     const [users, setUsers] = useState<User[]>([]);
     const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
-    // Стани для модального вікна бану
     const [banModalOpen, setBanModalOpen] = useState(false);
     const [userToBan, setUserToBan] = useState<number | null>(null);
     const [banReason, setBanReason] = useState("");
@@ -89,6 +89,19 @@ const AdminDashboard = () => {
         }
     };
 
+    const handleToggleFeature = async (userId: number, feature: string, currentLockState: boolean) => {
+        try {
+            await apiFetch(`/admin/users/restrict?id=${userId}`, {
+                method: 'POST',
+                body: JSON.stringify({ feature: feature, lock: !currentLockState })
+            });
+            showMessage(`Статус функції "${feature}" оновлено`, 'success');
+            fetchUsers();
+        } catch (error: any) {
+            showMessage(error.message || 'Помилка оновлення функції', 'error');
+        }
+    };
+
     const handleResolveAlert = async (alertId: number) => {
         try {
             await apiFetch(`/admin/alerts/resolve?id=${alertId}`, {
@@ -98,6 +111,15 @@ const AdminDashboard = () => {
             showMessage('Алерт позначено як вирішений', 'success');
         } catch (error: any) {
             showMessage(error.message || 'Помилка вирішення алерта', 'error');
+        }
+    };
+
+    const isFeatureLocked = (restrictedFeaturesStr: string, featureName: string) => {
+        try {
+            const parsed = JSON.parse(restrictedFeaturesStr || '{}');
+            return parsed[featureName] === true || parsed[featureName] === "true";
+        } catch {
+            return false;
         }
     };
 
@@ -133,12 +155,15 @@ const AdminDashboard = () => {
                                     <th className="p-4 font-medium">Email</th>
                                     <th className="p-4 font-medium">Роль</th>
                                     <th className="p-4 font-medium">Статус</th>
+                                    <th className="p-4 font-medium text-center">Обмеження ШІ</th>
                                     <th className="p-4 font-medium text-right">Дії</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-surfaceBorder">
                                 {users.map(u => {
                                     const isAdmin = u.role === 'admin';
+                                    const aiLocked = isFeatureLocked(u.restricted_features, 'ai_chat');
+
                                     return (
                                         <tr key={u.id} className="hover:bg-mainBg/30 transition-colors text-textMain text-sm">
                                             <td className="p-4">{u.id}</td>
@@ -156,15 +181,32 @@ const AdminDashboard = () => {
                                                     <span className="flex items-center gap-1 text-green-400"><CheckCircle className="w-3 h-3" /> Активний</span>
                                                 )}
                                             </td>
+
+                                            <td className="p-4 text-center">
+                                                <button
+                                                    onClick={() => handleToggleFeature(u.id, 'ai_chat', aiLocked)}
+                                                    disabled={isAdmin}
+                                                    title={aiLocked ? "Розблокувати ШІ-чат" : "Заблокувати ШІ-чат"}
+                                                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${isAdmin
+                                                            ? 'opacity-40 cursor-not-allowed bg-surfaceBorder text-textMuted'
+                                                            : aiLocked
+                                                                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25'
+                                                                : 'bg-mainBg text-textMuted hover:text-textMain border border-surfaceBorder'
+                                                        }`}
+                                                >
+                                                    {aiLocked ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <Bot className="w-3.5 h-3.5" />}
+                                                    {aiLocked ? 'ШІ вимкнено' : 'ШІ активний'}
+                                                </button>
+                                            </td>
+
                                             <td className="p-4 flex justify-end gap-2 items-center">
-                                                {/* Динамічна кнопка бану / розбану */}
                                                 {u.is_banned ? (
                                                     <button
                                                         onClick={() => handleBanClick(u.id, false)}
                                                         disabled={isAdmin || loadingUserId === u.id}
                                                         className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition-all text-xs font-semibold ${isAdmin
-                                                                ? 'opacity-50 cursor-not-allowed bg-surfaceBorder text-textMuted'
-                                                                : 'bg-green-500/15 text-green-400 hover:bg-green-500/25 border border-green-500/30 shadow-sm'
+                                                            ? 'opacity-50 cursor-not-allowed bg-surfaceBorder text-textMuted'
+                                                            : 'bg-green-500/15 text-green-400 hover:bg-green-500/25 border border-green-500/30 shadow-sm'
                                                             }`}
                                                     >
                                                         <Unlock className={`w-3.5 h-3.5 ${loadingUserId === u.id ? 'animate-spin' : ''}`} />
@@ -175,8 +217,8 @@ const AdminDashboard = () => {
                                                         onClick={() => handleBanClick(u.id, true)}
                                                         disabled={isAdmin || loadingUserId === u.id}
                                                         className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition-all text-xs font-semibold ${isAdmin
-                                                                ? 'opacity-50 cursor-not-allowed bg-surfaceBorder text-textMuted'
-                                                                : 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 shadow-sm'
+                                                            ? 'opacity-50 cursor-not-allowed bg-surfaceBorder text-textMuted'
+                                                            : 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 shadow-sm'
                                                             }`}
                                                     >
                                                         <Ban className={`w-3.5 h-3.5 ${loadingUserId === u.id ? 'animate-spin' : ''}`} />
@@ -229,7 +271,6 @@ const AdminDashboard = () => {
                 )}
             </div>
 
-            {/* Модальне вікно бану */}
             {banModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-surface border border-surfaceBorder rounded-2xl p-6 w-full max-w-md shadow-2xl">
