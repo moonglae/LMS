@@ -12,8 +12,6 @@ import (
 	"strings"
 )
 
-// --- 1. СТРУКТУРИ ДЛЯ НАШОГО ФРОНТЕНДУ (REACT) ---
-// (Твої структури без змін)
 type ChatRequest struct {
 	Topic    string `json:"topic"`
 	Message  string `json:"message"`
@@ -30,7 +28,6 @@ type AIResponse struct {
 	} `json:"mistakes"`
 }
 
-// (Твої структури без змін)
 type GeminiRequest struct {
 	Contents         []GeminiContent `json:"contents"`
 	GenerationConfig GeminiConfig    `json:"generationConfig"`
@@ -58,36 +55,32 @@ type GeminiResponse struct {
 	} `json:"candidates"`
 }
 
-// --- 3. ГОЛОВНА ФУНКЦІЯ ОБРОБКИ ---
-
 func (h *Handler) ChatWithAI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// Крок 1. Дістаємо userID
 	userID, ok := auth.GetUserID(r.Context())
 	if !ok {
 		http.Error(w, `{"error": "Неавторизований доступ"}`, http.StatusUnauthorized)
 		return
 	}
+
+	// ВИПРАВЛЕНО: перевіряємо ключ "ai_chat" замість "chat"
 	var restrictedFeatures string
 	err := h.DB.QueryRow("SELECT COALESCE(restricted_features::text, '{}') FROM users WHERE id = $1", userID).Scan(&restrictedFeatures)
 	if err == nil {
-		if strings.Contains(restrictedFeatures, `"chat": true`) || strings.Contains(restrictedFeatures, `"chat":true`) {
-			// Якщо адміністратор вимкнув чат, відкидаємо запит
+		if strings.Contains(restrictedFeatures, `"ai_chat": true`) || strings.Contains(restrictedFeatures, `"ai_chat":true`) {
 			auth.LogSecurityAlert(h.DB, userID, "blocked_feature_access", "Спроба використати заблокований AI-чат")
 			http.Error(w, `{"error": "Функція AI-чату заблокована для вашого акаунту"}`, http.StatusForbidden)
 			return
 		}
 	}
 
-	// Крок 2. Читаємо повідомлення від фронтенду
 	var req ChatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error": "Некоректний формат запиту"}`, http.StatusBadRequest)
 		return
 	}
 
-	// Крок 3. Формуємо промпт (інструкцію) для ШІ
 	systemPrompt := fmt.Sprintf(`
 Ти — дружній репетитор з "%s" мови. 
 Зараз ми відпрацьовуємо тему: "%s".
@@ -101,7 +94,6 @@ func (h *Handler) ChatWithAI(w http.ResponseWriter, r *http.Request) {
 2. "mistakes": масив об'єктів з полями "wrong_text" (моя помилка), "correct_text" (як правильно) та "rule_explanation" (пояснення правила українською мовою). Якщо помилок немає, поверни порожній масив [].(Відповідай більш розгорнуто правило і по простому мені я ще не впевнений у своїх знаннях. Не використовуй складні конструкції, щоб не заплутати мене.)
 `, req.Language, req.Topic, req.Message, req.Level, req.Language)
 
-	// Крок 4. Пакуємо наш промпт
 	geminiReqData := GeminiRequest{
 		Contents: []GeminiContent{
 			{Parts: []GeminiPart{{Text: systemPrompt}}},
@@ -117,7 +109,6 @@ func (h *Handler) ChatWithAI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Крок 5. Механізм перемикання API-ключів (Fallback)
 	apiKeys := []string{
 		os.Getenv("API_KEY_1"),
 		os.Getenv("API_KEY_2"),
@@ -128,55 +119,47 @@ func (h *Handler) ChatWithAI(w http.ResponseWriter, r *http.Request) {
 	var isSuccess bool
 
 	for i, apiKey := range apiKeys {
-		// Пропускаємо порожні ключі (якщо ти забув додати їх у .env)
 		if apiKey == "" {
 			continue
 		}
 
 		url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + apiKey
 
-		// Важливо: для кожної спроби створюємо новий буфер, бо після попереднього читання він порожній
 		resp, err := http.Post(url, "application/json", bytes.NewBuffer(requestBody))
 		if err != nil {
 			log.Printf("Користувач %d: помилка з'єднання з ШІ (Ключ %d): %v", userID, i+1, err)
-			continue // Йдемо до наступного ключа, якщо відпав інтернет
+			continue
 		}
 
-		// Читаємо відповідь одразу, щоб можна було закрити Body всередині циклу
 		respBody, err := io.ReadAll(resp.Body)
-		resp.Body.Close() // ЗАКРИВАЄМО ВРУЧНУ, без defer!
+		resp.Body.Close()
 
 		if err != nil {
 			log.Printf("Помилка читання відповіді (Ключ %d): %v", i+1, err)
 			continue
 		}
 
-		// Якщо зловили ліміт запитів (429 Too Many Requests)
 		if resp.StatusCode == http.StatusTooManyRequests {
 			log.Printf("⚠️ Ключ %d зловив ліміт (429). Перемикаємось на наступний...", i+1)
 			continue
 		}
 
-		// Інші помилки від Google (400, 500)
 		if resp.StatusCode != http.StatusOK {
 			log.Printf("🔴 Помилка від Google API (Ключ %d, Статус %d):\n%s", i+1, resp.StatusCode, string(respBody))
 			continue
 		}
 
-		// Якщо ми тут, запит успішний!
 		bodyBytes = respBody
 		isSuccess = true
-		break // Виходимо з циклу, інші ключі не чіпаємо
+		break
 	}
 
-	// Якщо всі ключі вичерпані або не спрацювали
 	if !isSuccess {
 		log.Printf("Користувач %d: Всі API ключі вичерпані або не працюють", userID)
 		http.Error(w, `{"error": "Всі сервіси ШІ тимчасово перевантажені. Спробуйте через кілька хвилин."}`, http.StatusTooManyRequests)
 		return
 	}
 
-	// Крок 6. Розпаковуємо відповідь Google у нашу структуру GeminiResponse
 	var geminiResp GeminiResponse
 	if err := json.Unmarshal(bodyBytes, &geminiResp); err != nil {
 		log.Printf("Помилка парсингу Gemini JSON: %v", err)
@@ -184,16 +167,13 @@ func (h *Handler) ChatWithAI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Перевіряємо, чи Google взагалі щось повернув
 	if len(geminiResp.Candidates) == 0 || len(geminiResp.Candidates[0].Content.Parts) == 0 {
 		http.Error(w, `{"error": "ШІ повернув порожню відповідь"}`, http.StatusInternalServerError)
 		return
 	}
 
-	// Крок 7. Дістаємо корисний JSON, який згенерував ШІ
 	aiGeneratedJSON := geminiResp.Candidates[0].Content.Parts[0].Text
 
-	// Перевіряємо, чи згенерував ШІ правильну структуру AIResponse
 	var finalResponse AIResponse
 	if err := json.Unmarshal([]byte(aiGeneratedJSON), &finalResponse); err != nil {
 		log.Printf("ШІ повернув невалідний формат даних: %s", aiGeneratedJSON)
@@ -201,7 +181,6 @@ func (h *Handler) ChatWithAI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Крок 8. Віддаємо ідеально відформатований результат у React!
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(finalResponse)
 }
