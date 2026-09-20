@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShieldAlert, Users, Ban, CheckCircle, Unlock, X } from 'lucide-react';
+import { ShieldAlert, Users, Ban, CheckCircle, Unlock, MessageSquareOff, X, Check } from 'lucide-react';
 
 interface Alert {
     id: number;
@@ -16,7 +16,7 @@ interface User {
     last_name: string;
     role: string;
     is_banned: boolean;
-    restricted_features: string;
+    restricted_features: string; 
 }
 
 const AdminDashboard = () => {
@@ -25,7 +25,7 @@ const AdminDashboard = () => {
     const [users, setUsers] = useState<User[]>([]);
     const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
-    // СТАНИ ДЛЯ КРАСИВОГО МОДАЛЬНОГО ВІКНА БАНУ
+    // Стани для модального вікна бану
     const [banModalOpen, setBanModalOpen] = useState(false);
     const [userToBan, setUserToBan] = useState<number | null>(null);
     const [banReason, setBanReason] = useState("");
@@ -64,29 +64,26 @@ const AdminDashboard = () => {
         }
     };
 
-    // ВІДКРИТТЯ ВІКНА АБО МИТТЄВИЙ РОЗБАН
     const handleBanClick = (userId: number, isBanning: boolean) => {
         if (isBanning) {
             setUserToBan(userId);
             setBanReason("");
             setBanModalOpen(true);
         } else {
-            // Розбанюємо без вікна і без причини
             executeBan(userId, false, "");
         }
     };
 
-    // ВИКОНАННЯ БАНУ (Відправка на бекенд)
     const executeBan = async (userId: number, banStatus: boolean, reason: string) => {
         try {
             const res = await fetch(`http://localhost:8080/api/admin/users/ban?id=${userId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
-                body: JSON.stringify({ ban: banStatus, reason: reason }) // Передаємо причину
+                body: JSON.stringify({ ban: banStatus, reason: reason })
             });
 
             if (res.ok) {
-                showMessage(`Користувача ${userId} успішно ${banStatus ? 'забанено' : 'розбанено'}`, 'success');
+                showMessage(`Користувача успішно ${banStatus ? 'забанено' : 'розбанено'}`, 'success');
                 fetchUsers();
             } else {
                 const errorData = await res.json().catch(() => null);
@@ -95,12 +92,12 @@ const AdminDashboard = () => {
         } catch (error) {
             console.error(error);
         } finally {
-            setBanModalOpen(false); // Закриваємо вікно
+            setBanModalOpen(false);
         }
     };
 
+    // Тепер функція використовується в таблиці користувачів
     const handleRestrictFeature = async (userId: number, feature: string, lockStatus: boolean) => {
-        // ... (твій код без змін)
         try {
             const res = await fetch(`http://localhost:8080/api/admin/users/restrict?id=${userId}`, {
                 method: 'POST',
@@ -109,7 +106,7 @@ const AdminDashboard = () => {
             });
 
             if (res.ok) {
-                showMessage(`Чат для користувача ${userId} ${lockStatus ? 'вимкнено' : 'увімкнено'}`, 'success');
+                showMessage(`Обмеження для користувача оновлено`, 'success');
                 fetchUsers();
             } else {
                 const errorData = await res.json().catch(() => null);
@@ -120,8 +117,8 @@ const AdminDashboard = () => {
         }
     };
 
+    // Тепер функція використовується в таблиці алертів
     const handleResolveAlert = async (alertId: number) => {
-        // ... (твій код без змін)
         try {
             const res = await fetch(`http://localhost:8080/api/admin/alerts/resolve?id=${alertId}`, {
                 method: 'POST',
@@ -174,6 +171,7 @@ const AdminDashboard = () => {
                             <tbody className="divide-y divide-surfaceBorder">
                                 {users.map(u => {
                                     const isAdmin = u.role === 'admin';
+                                    const isChatRestricted = u.restricted_features?.includes('chat');
                                     return (
                                         <tr key={u.id} className="hover:bg-mainBg/30 transition-colors text-textMain text-sm">
                                             <td className="p-4">{u.id}</td>
@@ -192,7 +190,18 @@ const AdminDashboard = () => {
                                                 )}
                                             </td>
                                             <td className="p-4 flex justify-end gap-2">
-                                                {/* КНОПКИ БАНУ З ВИКЛИКОМ НОВОЇ ФУНКЦІЇ */}
+                                                {/* Кнопка обмеження чату */}
+                                                {!isAdmin && (
+                                                    <button 
+                                                        onClick={() => handleRestrictFeature(u.id, 'chat', !isChatRestricted)}
+                                                        title={isChatRestricted ? "Увімкнути чат" : "Вимкнути чат"}
+                                                        className={`p-2 rounded-lg transition-colors border ${isChatRestricted ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 'bg-surfaceBorder/40 text-textMuted hover:text-textMain'}`}
+                                                    >
+                                                        <MessageSquareOff className="w-4 h-4" />
+                                                    </button>
+                                                )}
+
+                                                {/* Кнопки бану / розбану */}
                                                 {u.is_banned ? (
                                                     <button onClick={() => handleBanClick(u.id, false)} disabled={isAdmin} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors ${isAdmin ? 'opacity-50 cursor-not-allowed bg-surfaceBorder' : 'bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/20'}`}>
                                                         <Unlock className="w-4 h-4" /> Розбанити
@@ -210,10 +219,46 @@ const AdminDashboard = () => {
                         </table>
                     </div>
                 )}
-                {/* Вкладку alerts я приховав у цьому сніпеті для стислості, залиш її такою, як у тебе */}
+
+                {activeTab === 'alerts' && (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-mainBg/50 border-b border-surfaceBorder text-textMuted text-sm">
+                                    <th className="p-4 font-medium">ID</th>
+                                    <th className="p-4 font-medium">User ID</th>
+                                    <th className="p-4 font-medium">Тип активності</th>
+                                    <th className="p-4 font-medium">Опис</th>
+                                    <th className="p-4 font-medium">Дата</th>
+                                    <th className="p-4 font-medium text-right">Дія</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-surfaceBorder">
+                                {alerts.map(alert => (
+                                    <tr key={alert.id} className="hover:bg-mainBg/30 transition-colors text-textMain text-sm">
+                                        <td className="p-4">{alert.id}</td>
+                                        <td className="p-4 font-medium">{alert.user_id}</td>
+                                        <td className="p-4"><span className="px-2 py-1 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 text-xs">{alert.activity_type}</span></td>
+                                        <td className="p-4 text-textMuted">{alert.description}</td>
+                                        <td className="p-4 text-textMuted text-xs">{new Date(alert.created_at).toLocaleString()}</td>
+                                        <td className="p-4 flex justify-end">
+                                            {/* Кнопка вирішення алерта */}
+                                            <button 
+                                                onClick={() => handleResolveAlert(alert.id)}
+                                                className="flex items-center gap-1 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium"
+                                            >
+                                                <Check className="w-3.5 h-3.5" /> Вирішити
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
 
-            {/* КРАСИВЕ МОДАЛЬНЕ ВІКНО БАНУ */}
+            {/* Модальне вікно бану */}
             {banModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-surface border border-surfaceBorder rounded-2xl p-6 w-full max-w-md shadow-2xl">
@@ -238,8 +283,8 @@ const AdminDashboard = () => {
                             <button onClick={() => setBanModalOpen(false)} className="px-5 py-2.5 text-textMuted hover:text-textMain font-medium transition-colors">
                                 Скасувати
                             </button>
-                            <button
-                                onClick={() => userToBan && executeBan(userToBan, true, banReason)}
+                            <button 
+                                onClick={() => userToBan && executeBan(userToBan, true, banReason)} 
                                 className="bg-red-500 hover:bg-red-600 text-white px-6 py-2.5 rounded-xl font-bold transition-colors shadow-lg shadow-red-500/20"
                             >
                                 Забанити назавжди
