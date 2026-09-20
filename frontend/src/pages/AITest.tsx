@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Loader2, CheckCircle, XCircle, ArrowRight, Brain, RotateCcw, Info } from 'lucide-react';
+import { apiFetch } from '../api';
 
 interface Question {
     type: 'choice' | 'fill';
@@ -10,7 +11,6 @@ interface Question {
     explanation: string;
 }
 
-// Новий інтерфейс для даних від бекенду
 interface TestData {
     rules: string[];
     questions: Question[];
@@ -28,7 +28,7 @@ export default function AITest() {
     const [error, setError] = useState('');
 
     const [questions, setQuestions] = useState<Question[]>([]);
-    const [rules, setRules] = useState<string[]>([]); // Зберігаємо правила від ШІ
+    const [rules, setRules] = useState<string[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [userAnswer, setUserAnswer] = useState('');
     const [isAnswerChecked, setIsAnswerChecked] = useState(false);
@@ -44,21 +44,12 @@ export default function AITest() {
         setError('');
 
         try {
-            const res = await fetch('http://localhost:8080/api/practice/generate-test', {
+            // Використовуємо apiFetch замість жорсткого localhost
+            const data = (await apiFetch('/practice/generate-test', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
                 body: JSON.stringify({ topic, theory, question_count: questionCount })
-            });
+            })) as TestData;
 
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.error || 'Помилка генерації тесту');
-            }
-
-            const data: TestData = await res.json(); // Отримуємо об'єкт з правилами і питаннями
             setQuestions(data.questions);
             setRules(data.rules || []);
             setPhase('testing');
@@ -67,7 +58,7 @@ export default function AITest() {
             setUserAnswer('');
             setIsAnswerChecked(false);
         } catch (err: any) {
-            setError(err.message);
+            setError(err.message || 'Помилка генерації тесту');
             setPhase('setup');
         }
     };
@@ -78,7 +69,6 @@ export default function AITest() {
 
         const currentQ = questions[currentIndex];
 
-        // Розумна нормалізація: якщо ШІ загадав "-", а юзер залишив поле пустим - зараховуємо!
         const normalize = (val: string) => {
             const trimmed = val.trim().toLowerCase();
             return trimmed === '' ? '-' : trimmed;
@@ -100,7 +90,6 @@ export default function AITest() {
 
     const resetTest = () => {
         setPhase('setup');
-        // Не стираємо topic та theory, щоб легко згенерувати ще раз
     };
 
     if (phase === 'setup') {
@@ -129,7 +118,7 @@ export default function AITest() {
                             <option value={20}>20 питань (Максимум)</option>
                         </select>
                     </div>
-                    <button onClick={handleGenerate} className="w-full py-4 bg-primary text-white rounded-xl font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2">
+                    <button onClick={handleGenerate} className="w-full py-4 bg-primary text-white rounded-xl font-medium hover:bg-primary/95 transition-colors flex items-center justify-center gap-2">
                         Згенерувати тест
                     </button>
                 </div>
@@ -163,10 +152,7 @@ export default function AITest() {
     const isCorrect = userAnswer.trim().toLowerCase() === currentQ?.correct_answer.toLowerCase();
 
     return (
-        // Змінено max-w-2xl на max-w-5xl, щоб вмістити сайдбар з правилами
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row gap-6 items-start">
-
-            {/* Ліва колонка: Самі питання */}
             <div className="flex-1 w-full p-6 bg-surface border border-surfaceBorder rounded-2xl shadow-sm">
                 <div className="flex justify-between items-center mb-6">
                     <span className="text-sm font-medium text-textMuted">Тема: {topic}</span>
@@ -227,7 +213,6 @@ export default function AITest() {
                 </div>
             </div>
 
-            {/* Права колонка: Сайдбар з правилами від ШІ */}
             {rules && rules.length > 0 && (
                 <div className="w-full md:w-72 shrink-0 p-5 bg-blue-500/5 border border-blue-500/20 rounded-2xl h-fit">
                     <h4 className="font-bold text-blue-400 mb-4 flex items-center gap-2">
@@ -240,7 +225,6 @@ export default function AITest() {
                     </ul>
                 </div>
             )}
-
         </div>
     );
 }
