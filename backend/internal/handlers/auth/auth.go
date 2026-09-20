@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -19,6 +21,7 @@ func NewAuthHandler(db *sql.DB) *AuthHandler {
 	return &AuthHandler{DB: db}
 }
 
+// --- СТРУКТУРИ ДАНИХ ---
 type RegisterRequest struct {
 	Email     string `json:"email"`
 	Password  string `json:"password"`
@@ -46,17 +49,64 @@ type UserResponse struct {
 	BanReason string `json:"ban_reason"`
 }
 
+type UpdatePasswordRequest struct {
+	OldPassword string `json:"old_password"`
+	NewPassword string `json:"new_password"`
+}
+
+// --- БАЗА ДЛЯ RATE LIMITING ПО IP (Для логіну та реєстрації) ---
+var ipRateLimiter sync.Map
+
+func checkIPRateLimit(r *http.Request, limit time.Duration) bool {
+	ip := r.RemoteAddr
+	if colonPos := strings.LastIndex(ip, ":"); colonPos != -1 {
+		ip = ip[:colonPos] // Видаляємо порт, залишаємо лише IP
+	}
+
+	now := time.Now()
+	val, loaded := ipRateLimiter.LoadOrStore(ip, now)
+	if loaded {
+		lastReq := val.(time.Time)
+		if now.Sub(lastReq) < limit {
+			return false // Блокуємо: пройшло менше часу, ніж дозволено
+		}
+		ipRateLimiter.Store(ip, now) // Оновлюємо час останнього запиту
+	}
+	return true
+}
+
+// --- ОБРОБНИКИ (HANDLERS) ---
+
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	// 1. ЗАХИСТ ВІД СПАМ-РЕЄСТРАЦІЙ: Максимум 1 реєстрація на 30 секунд з одного IP
+	if !checkIPRateLimit(r, 30*time.Second) {
+		http.Error(w, `{"error": "Занадто багато спроб. Зачекайте 30 секунд."}`, http.StatusTooManyRequests)
+		return
+	}
+
+	// 2. ЗАХИСТ ВІД JSON-БОМБ: Обмежуємо розмір запиту до 10 КБ
+	r.Body = http.MaxBytesReader(w, r.Body, 10240)
+
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error": "Некоректний формат даних"}`, http.StatusBadRequest)
+		http.Error(w, `{"error": "Некоректний формат даних або запит занадто великий"}`, http.StatusBadRequest)
 		return
 	}
 
 	if req.Email == "" || req.Password == "" || req.FirstName == "" {
 		http.Error(w, `{"error": "Будь ласка, заповніть всі обов'язкові поля"}`, http.StatusBadRequest)
+		return
+	}
+
+	// 3. БАЗОВІ ЛІМІТИ НА ДОВЖИНУ
+	if len(req.Password) < 6 {
+		http.Error(w, `{"error": "Пароль має містити щонайменше 6 символів"}`, http.StatusBadRequest)
+		return
+	}
+	if len(req.FirstName) > 50 || len(req.LastName) > 50 {
+		http.Error(w, `{"error": "Ім'я та прізвище не можуть бути довшими за 50 символів"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -66,21 +116,72 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := `INSERT INTO users (email, password_hash, first_name, last_name) 
-			  VALUES ($1, $2, $3, $4) RETURNING id`
-
+	query := `INSERT INTO users (email, password_hash, first_name, last_name) VALUES ($1, $2, $3, $4) RETURNING id`
 	var newUserID int
 	err = h.DB.QueryRow(query, req.Email, string(hashedPassword), req.FirstName, req.LastName).Scan(&newUserID)
 	if err != nil {
-		http.Error(w, `{"error": "Користувач з таким email вже існує або сталася помилка БД"}`, http.StatusConflict)
+		http.Error(w, `{"error": "Користувач з таким email вже існує"}`, http.StatusConflict)
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Реєстрація успішна",
-		"user_id": newUserID,
+	json.NewEncoder(w).Encode(map[string]interface{}{"message": "Реєстрація успішна", "user_id": newUserID})
+}
+
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// 1. ЗАХИСТ ВІД БРУТФОРСУ (Підбору паролів): Максимум 1 спроба логіну на 5 секунд з одного IP
+	if !checkIPRateLimit(r, 5*time.Second) {
+		http.Error(w, `{"error": "Занадто багато спроб входу. Зачекайте 5 секунд."}`, http.StatusTooManyRequests)
+		return
+	}
+
+	// 2. ЗАХИСТ ВІД JSON-БОМБ (10 КБ)
+	r.Body = http.MaxBytesReader(w, r.Body, 10240)
+
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error": "Некоректний формат даних"}`, http.StatusBadRequest)
+		return
+	}
+
+	var storedHash string
+	var user UserResponse
+
+	query := `SELECT id, password_hash, first_name, last_name, email, role, is_banned, COALESCE(ban_reason, '') FROM users WHERE email = $1`
+	err := h.DB.QueryRow(query, req.Email).Scan(&user.ID, &storedHash, &user.FirstName, &user.LastName, &user.Email, &user.Role, &user.IsBanned, &user.BanReason)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, `{"error": "Невірний email або пароль"}`, http.StatusUnauthorized)
+			return
+		}
+		http.Error(w, `{"error": "Помилка сервера"}`, http.StatusInternalServerError)
+		return
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(req.Password))
+	if err != nil {
+		// ЛОГУВАННЯ
+		LogSecurityAlert(h.DB, user.ID, "failed_login", "Невдала спроба входу (невірний пароль)")
+		http.Error(w, `{"error": "Невірний email або пароль"}`, http.StatusUnauthorized)
+		return
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub":  user.ID,
+		"role": user.Role,
+		"exp":  time.Now().Add(time.Hour * 72).Unix(),
 	})
+
+	secretKey := os.Getenv("JWT_SECRET")
+	tokenString, err := token.SignedString([]byte(secretKey))
+	if err != nil {
+		http.Error(w, `{"error": "Помилка генерації токена"}`, http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{"token": tokenString, "user": user})
 }
 
 func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
@@ -90,9 +191,19 @@ func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ЗАХИСТ ВІД JSON-БОМБ (10 КБ)
+	r.Body = http.MaxBytesReader(w, r.Body, 10240)
+
 	var req UpdateProfileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error": "Некоректний формат"}`, http.StatusBadRequest)
+		return
+	}
+
+	// ЗАХИСТ ВІД СПАМУ ТЕКСТОМ В ІМЕНІ
+	if len(req.FirstName) > 50 || len(req.LastName) > 50 {
+		LogSecurityAlert(h.DB, userID, "profile_data_flooding", "Спроба встановити аномально довге ім'я/прізвище (>50 симв.)")
+		http.Error(w, `{"error": "Ім'я та прізвище не можуть бути довшими за 50 символів"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -106,17 +217,15 @@ func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"message": "Дані успішно оновлено"}`))
 }
 
-type UpdatePasswordRequest struct {
-	OldPassword string `json:"old_password"`
-	NewPassword string `json:"new_password"`
-}
-
 func (h *AuthHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	userID, ok := GetUserID(r.Context())
 	if !ok {
 		http.Error(w, `{"error": "Неавторизований доступ"}`, http.StatusUnauthorized)
 		return
 	}
+
+	// ЗАХИСТ ВІД JSON-БОМБ (10 КБ)
+	r.Body = http.MaxBytesReader(w, r.Body, 10240)
 
 	var req UpdatePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -154,59 +263,6 @@ func (h *AuthHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"message": "Пароль успішно змінено"}`))
 }
 
-func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	var req LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error": "Некоректний формат даних"}`, http.StatusBadRequest)
-		return
-	}
-
-	var storedHash string
-	var user UserResponse
-
-	// Витягуємо також is_banned та ban_reason
-	query := `SELECT id, password_hash, first_name, last_name, email, role, is_banned, COALESCE(ban_reason, '') 
-	          FROM users WHERE email = $1`
-	err := h.DB.QueryRow(query, req.Email).Scan(
-		&user.ID, &storedHash, &user.FirstName, &user.LastName, &user.Email, &user.Role, &user.IsBanned, &user.BanReason,
-	)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, `{"error": "Невірний email або пароль"}`, http.StatusUnauthorized)
-			return
-		}
-		http.Error(w, `{"error": "Помилка сервера"}`, http.StatusInternalServerError)
-		return
-	}
-
-	err = bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(req.Password))
-	if err != nil {
-		LogSecurityAlert(h.DB, user.ID, "failed_login", "Невдала спроба входу (невірний пароль)")
-		http.Error(w, `{"error": "Невірний email або пароль"}`, http.StatusUnauthorized)
-		return
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub":  user.ID,
-		"role": user.Role,
-		"exp":  time.Now().Add(time.Hour * 72).Unix(),
-	})
-
-	secretKey := os.Getenv("JWT_SECRET")
-	tokenString, err := token.SignedString([]byte(secretKey))
-	if err != nil {
-		http.Error(w, `{"error": "Помилка генерації токена"}`, http.StatusInternalServerError)
-		return
-	}
-
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"token": tokenString,
-		"user":  user,
-	})
-}
-
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -217,16 +273,11 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user UserResponse
-	// Додано перевірку is_banned та ban_reason
-	query := `SELECT id, email, first_name, last_name, role, is_banned, COALESCE(ban_reason, '') 
-	          FROM users WHERE id = $1`
-	err := h.DB.QueryRow(query, userID).Scan(
-		&user.ID, &user.Email, &user.FirstName, &user.LastName, &user.Role, &user.IsBanned, &user.BanReason,
-	)
+	query := `SELECT id, email, first_name, last_name, role, is_banned, COALESCE(ban_reason, '') FROM users WHERE id = $1`
+	err := h.DB.QueryRow(query, userID).Scan(&user.ID, &user.Email, &user.FirstName, &user.LastName, &user.Role, &user.IsBanned, &user.BanReason)
 	if err != nil {
 		http.Error(w, `{"error": "Помилка отримання даних користувача"}`, http.StatusInternalServerError)
 		return
 	}
-
 	json.NewEncoder(w).Encode(user)
 }
