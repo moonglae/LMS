@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShieldAlert, Users, Ban, CheckCircle, Unlock, MessageSquareOff, X, Check } from 'lucide-react';
+import { ShieldAlert, Users, Ban, CheckCircle, Unlock, X, Check } from 'lucide-react';
 import { apiFetch } from '../api';
 
 interface Alert {
@@ -17,7 +17,6 @@ interface User {
     last_name: string;
     role: string;
     is_banned: boolean;
-    restricted_features: string; 
 }
 
 const AdminDashboard = () => {
@@ -30,6 +29,7 @@ const AdminDashboard = () => {
     const [banModalOpen, setBanModalOpen] = useState(false);
     const [userToBan, setUserToBan] = useState<number | null>(null);
     const [banReason, setBanReason] = useState("");
+    const [loadingUserId, setLoadingUserId] = useState<number | null>(null);
 
     useEffect(() => {
         if (activeTab === 'alerts') fetchAlerts();
@@ -72,6 +72,7 @@ const AdminDashboard = () => {
     };
 
     const executeBan = async (userId: number, banStatus: boolean, reason: string) => {
+        setLoadingUserId(userId);
         try {
             await apiFetch(`/admin/users/ban?id=${userId}`, {
                 method: 'POST',
@@ -83,21 +84,8 @@ const AdminDashboard = () => {
         } catch (error: any) {
             showMessage(error.message || 'Помилка оновлення статусу', 'error');
         } finally {
+            setLoadingUserId(null);
             setBanModalOpen(false);
-        }
-    };
-
-    const handleRestrictFeature = async (userId: number, feature: string, lockStatus: boolean) => {
-        try {
-            await apiFetch(`/admin/users/restrict?id=${userId}`, {
-                method: 'POST',
-                body: JSON.stringify({ feature, lock: lockStatus })
-            });
-
-            showMessage(`Обмеження для користувача оновлено`, 'success');
-            fetchUsers();
-        } catch (error: any) {
-            showMessage(error.message || 'Помилка оновлення обмежень', 'error');
         }
     };
 
@@ -151,7 +139,6 @@ const AdminDashboard = () => {
                             <tbody className="divide-y divide-surfaceBorder">
                                 {users.map(u => {
                                     const isAdmin = u.role === 'admin';
-                                    const isChatRestricted = u.restricted_features?.includes('chat');
                                     return (
                                         <tr key={u.id} className="hover:bg-mainBg/30 transition-colors text-textMain text-sm">
                                             <td className="p-4">{u.id}</td>
@@ -169,24 +156,31 @@ const AdminDashboard = () => {
                                                     <span className="flex items-center gap-1 text-green-400"><CheckCircle className="w-3 h-3" /> Активний</span>
                                                 )}
                                             </td>
-                                            <td className="p-4 flex justify-end gap-2">
-                                                {!isAdmin && (
-                                                    <button 
-                                                        onClick={() => handleRestrictFeature(u.id, 'chat', !isChatRestricted)}
-                                                        title={isChatRestricted ? "Увімкнути чат" : "Вимкнути чат"}
-                                                        className={`p-2 rounded-lg transition-colors border ${isChatRestricted ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 'bg-surfaceBorder/40 text-textMuted hover:text-textMain'}`}
-                                                    >
-                                                        <MessageSquareOff className="w-4 h-4" />
-                                                    </button>
-                                                )}
-
+                                            <td className="p-4 flex justify-end gap-2 items-center">
+                                                {/* Динамічна кнопка бану / розбану */}
                                                 {u.is_banned ? (
-                                                    <button onClick={() => handleBanClick(u.id, false)} disabled={isAdmin} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors ${isAdmin ? 'opacity-50 cursor-not-allowed bg-surfaceBorder' : 'bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/20'}`}>
-                                                        <Unlock className="w-4 h-4" /> Розбанити
+                                                    <button
+                                                        onClick={() => handleBanClick(u.id, false)}
+                                                        disabled={isAdmin || loadingUserId === u.id}
+                                                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition-all text-xs font-semibold ${isAdmin
+                                                                ? 'opacity-50 cursor-not-allowed bg-surfaceBorder text-textMuted'
+                                                                : 'bg-green-500/15 text-green-400 hover:bg-green-500/25 border border-green-500/30 shadow-sm'
+                                                            }`}
+                                                    >
+                                                        <Unlock className={`w-3.5 h-3.5 ${loadingUserId === u.id ? 'animate-spin' : ''}`} />
+                                                        {loadingUserId === u.id ? 'Оновлення...' : 'Розбанити'}
                                                     </button>
                                                 ) : (
-                                                    <button onClick={() => handleBanClick(u.id, true)} disabled={isAdmin} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors ${isAdmin ? 'opacity-50 cursor-not-allowed bg-surfaceBorder' : 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20'}`}>
-                                                        <Ban className="w-4 h-4" /> Забанити
+                                                    <button
+                                                        onClick={() => handleBanClick(u.id, true)}
+                                                        disabled={isAdmin || loadingUserId === u.id}
+                                                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition-all text-xs font-semibold ${isAdmin
+                                                                ? 'opacity-50 cursor-not-allowed bg-surfaceBorder text-textMuted'
+                                                                : 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 shadow-sm'
+                                                            }`}
+                                                    >
+                                                        <Ban className={`w-3.5 h-3.5 ${loadingUserId === u.id ? 'animate-spin' : ''}`} />
+                                                        {loadingUserId === u.id ? 'Оновлення...' : 'Забанити'}
                                                     </button>
                                                 )}
                                             </td>
@@ -220,7 +214,7 @@ const AdminDashboard = () => {
                                         <td className="p-4 text-textMuted">{alert.description}</td>
                                         <td className="p-4 text-textMuted text-xs">{new Date(alert.created_at).toLocaleString()}</td>
                                         <td className="p-4 flex justify-end">
-                                            <button 
+                                            <button
                                                 onClick={() => handleResolveAlert(alert.id)}
                                                 className="flex items-center gap-1 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium"
                                             >
@@ -235,6 +229,7 @@ const AdminDashboard = () => {
                 )}
             </div>
 
+            {/* Модальне вікно бану */}
             {banModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-surface border border-surfaceBorder rounded-2xl p-6 w-full max-w-md shadow-2xl">
@@ -259,8 +254,8 @@ const AdminDashboard = () => {
                             <button onClick={() => setBanModalOpen(false)} className="px-5 py-2.5 text-textMuted hover:text-textMain font-medium transition-colors">
                                 Скасувати
                             </button>
-                            <button 
-                                onClick={() => userToBan && executeBan(userToBan, true, banReason)} 
+                            <button
+                                onClick={() => userToBan && executeBan(userToBan, true, banReason)}
                                 className="bg-red-500 hover:bg-red-600 text-white px-6 py-2.5 rounded-xl font-bold transition-colors shadow-lg shadow-red-500/20"
                             >
                                 Забанити назавжди
