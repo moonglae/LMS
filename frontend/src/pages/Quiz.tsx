@@ -1,10 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
-<<<<<<< HEAD
 import { CheckCircle, XCircle, Loader2, Shuffle as ShuffleIcon, Settings, List, Type } from 'lucide-react';
-=======
-import { CheckCircle, XCircle, Loader2, Shuffle } from 'lucide-react';
->>>>>>> 7dbb58520f0608413d58b131d2aaf3008ba3bf10
 import { apiFetch } from '../api';
 
 interface GeneratedQuestion {
@@ -14,34 +10,7 @@ interface GeneratedQuestion {
     options: string[];
     correct: string;
     source_id?: number;
-<<<<<<< HEAD
     type?: 'choice' | 'fill';
-=======
-}
-
-function buildReverseQuestion(question: GeneratedQuestion, allQuestions: GeneratedQuestion[]): GeneratedQuestion | null {
-    if (!question?.question_text || !question?.correct) return null;
-
-    const reverseQuestionText = question.correct;
-    const reverseCorrect = question.question_text;
-
-    const reverseOptions = allQuestions
-        .map(item => item.question_text)
-        .filter((option, index, array) => Boolean(option) && option !== reverseCorrect && array.indexOf(option) === index)
-        .sort(() => Math.random() - 0.5)
-        .slice(0, 3);
-
-    if (!reverseQuestionText || !reverseCorrect) return null;
-
-    return {
-        ...question,
-        id: question.id + 1000000,
-        source_id: question.source_id ?? question.id,
-        question_text: reverseQuestionText,
-        correct: reverseCorrect,
-        options: [reverseCorrect, ...reverseOptions].sort(() => Math.random() - 0.5),
-    };
->>>>>>> 7dbb58520f0608413d58b131d2aaf3008ba3bf10
 }
 
 interface AnswerResult {
@@ -75,10 +44,7 @@ export default function Quiz() {
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isShuffling, setIsShuffling] = useState(false);
-<<<<<<< HEAD
     const [fillAnswer, setFillAnswer] = useState('');
-=======
->>>>>>> 7dbb58520f0608413d58b131d2aaf3008ba3bf10
 
     // Завантажуємо "сирі" слова з бази
     useEffect(() => {
@@ -103,21 +69,8 @@ export default function Quiz() {
                     return;
                 }
 
-<<<<<<< HEAD
                 setRawQuestions(data);
                 setPhase('setup');
-=======
-                const expandedQuestions = data.flatMap((question: GeneratedQuestion) => {
-                    const questionsToAdd = [question];
-                    const reverseQuestion = buildReverseQuestion(question, data);
-                    if (reverseQuestion) {
-                        questionsToAdd.push(reverseQuestion);
-                    }
-                    return questionsToAdd;
-                });
-
-                setQuestions(expandedQuestions);
->>>>>>> 7dbb58520f0608413d58b131d2aaf3008ba3bf10
             } catch (err: any) {
                 setError(err.message || 'Помилка завантаження.');
                 setPhase('setup');
@@ -160,7 +113,7 @@ export default function Quiz() {
             const reverseCorrect = q.question_text; // Англійське слово
             const reverseQuestionText = q.correct;  // Українське слово
 
-            // Генеруємо хибні варіанти
+            // Генеруємо хибні варіанти для тестів
             const reverseOptions = rawQuestions
                 .map(item => item.question_text)
                 .filter((opt) => Boolean(opt) && opt !== reverseCorrect)
@@ -179,6 +132,7 @@ export default function Quiz() {
                     });
                 }
             } else if (mode === 'fill') {
+                // 1 питання: Укр->Англ (вписування)
                 if (reverseQuestionText && reverseCorrect) {
                     expanded.push({
                         ...q, id: q.id + 2000000, source_id: q.source_id ?? q.id,
@@ -187,6 +141,7 @@ export default function Quiz() {
                     });
                 }
             } else if (mode === 'mix') {
+                // Мікс: випадково обираємо тип завдання
                 const rand = Math.random();
                 if (rand < 0.33) {
                     expanded.push({ ...q, type: 'choice' });
@@ -218,15 +173,9 @@ export default function Quiz() {
 
     const handleAnswer = (selectedOption: string) => {
         const question = questions[currentQ];
-<<<<<<< HEAD
         const isCorrect = question.type === 'fill'
             ? selectedOption.trim().toLowerCase() === question.correct.toLowerCase()
             : selectedOption === question.correct;
-=======
-        const isCorrect = selectedOption === question.correct;
-
-        setAnswers(prev => [...prev, { question_id: question.source_id ?? question.id, is_correct: isCorrect }]);
->>>>>>> 7dbb58520f0608413d58b131d2aaf3008ba3bf10
 
         setAnswers(prev => [...prev, { question_id: question.source_id ?? question.id, is_correct: isCorrect }]);
         if (isCorrect) setScore((prev) => prev + 1);
@@ -239,45 +188,22 @@ export default function Quiz() {
         }
     };
 
-<<<<<<< HEAD
     const handleFillSubmit = () => {
         if (!fillAnswer.trim()) return;
         handleAnswer(fillAnswer);
     };
-=======
-    const handleShuffle = () => {
-        if (questions.length <= 1) return;
-
-        setIsShuffling(true);
-        const currentQuestion = questions[currentQ];
-        const restQuestions = questions.filter((_, index) => index !== currentQ);
-        const shuffledRest = [...restQuestions].sort(() => Math.random() - 0.5);
-        const shuffledQuestions = [currentQuestion, ...shuffledRest];
-
-        setQuestions(shuffledQuestions);
-        setCurrentQ(0);
-        setTimeout(() => setIsShuffling(false), 150);
-    };
-
-    if (isLoading) return <div className="flex justify-center mt-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
-    if (isSaving) return <div className="flex justify-center mt-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /> Збереження...</div>;
->>>>>>> 7dbb58520f0608413d58b131d2aaf3008ba3bf10
 
     const handleShuffle = () => {
         if (currentQ >= questions.length - 1) return;
 
         setIsShuffling(true);
 
+        // Перемішуємо тільки залишок невідповіданих питань, не чіпаючи минулі
         const pastQuestions = questions.slice(0, currentQ);
-
         const remainingQuestions = questions.slice(currentQ);
-
         const shuffledRemaining = [...remainingQuestions].sort(() => Math.random() - 0.5);
 
-        // 4. Збираємо масив назад
         setQuestions([...pastQuestions, ...shuffledRemaining]);
-
-
         setFillAnswer('');
         setTimeout(() => setIsShuffling(false), 150);
     };
@@ -324,7 +250,7 @@ export default function Quiz() {
                             >
                                 <Type className={`w-6 h-6 mb-2 ${mode === 'fill' ? 'text-primary' : 'text-textMuted'}`} />
                                 <h3 className="font-bold text-textMain mb-1">Вписування</h3>
-                                <p className="text-xs text-textMuted">Слово → переклад (письмо)</p>
+                                <p className="text-xs text-textMuted">Укр → Англ (письмо)</p>
                             </button>
 
                             <button
@@ -393,11 +319,7 @@ export default function Quiz() {
                         onClick={handleShuffle}
                         className="inline-flex items-center gap-2 rounded-xl border border-surfaceBorder bg-surface px-3 py-2 text-sm font-medium text-textMain transition-colors hover:bg-surfaceBorder"
                     >
-<<<<<<< HEAD
                         <ShuffleIcon className="w-4 h-4" />
-=======
-                        <Shuffle className="w-4 h-4" />
->>>>>>> 7dbb58520f0608413d58b131d2aaf3008ba3bf10
                         Перемішати
                     </button>
                 </div>
