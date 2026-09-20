@@ -35,10 +35,8 @@ interface Goal {
 }
 
 export default function Profile() {
-    // Глобальний стейт для оновлення імені в хедері без перезавантаження
     const globalUser = useAuthStore((state) => state.user);
     const setGlobalUser = useAuthStore((state) => state.setUser);
-    const getToken = () => localStorage.getItem('token');
 
     const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
 
@@ -51,7 +49,6 @@ export default function Profile() {
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
-    // Стани для форми налаштувань
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
     const [profileMessage, setProfileMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
@@ -92,7 +89,6 @@ export default function Profile() {
         fetchProfileData(true);
     }, []);
 
-    // --- Обробники для цілей ---
     const handleAddGoal = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newGoalText.trim()) return;
@@ -130,25 +126,19 @@ export default function Profile() {
         }
     };
 
-    // --- Обробники для налаштувань ---
     const handleUpdateProfile = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            const res = await fetch('http://localhost:8080/api/profile/update', {
+            await apiFetch('/profile/update', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
                 body: JSON.stringify({ first_name: firstName, last_name: lastName })
             });
 
-            if (res.ok) {
-                setProfileMessage({ text: 'Дані успішно оновлено', type: 'success' });
-                if (userData) setUserData({ ...userData, first_name: firstName, last_name: lastName });
-                if (globalUser) setGlobalUser({ ...globalUser, first_name: firstName, last_name: lastName });
-            } else {
-                setProfileMessage({ text: 'Помилка оновлення даних', type: 'error' });
-            }
-        } catch (error) {
-            setProfileMessage({ text: 'Сталася помилка мережі', type: 'error' });
+            setProfileMessage({ text: 'Дані успішно оновлено', type: 'success' });
+            if (userData) setUserData({ ...userData, first_name: firstName, last_name: lastName });
+            if (globalUser) setGlobalUser({ ...globalUser, first_name: firstName, last_name: lastName });
+        } catch (error: any) {
+            setProfileMessage({ text: error.message || 'Помилка оновлення даних', type: 'error' });
         }
         setTimeout(() => setProfileMessage(null), 3000);
     };
@@ -160,21 +150,16 @@ export default function Profile() {
             return;
         }
         try {
-            const res = await fetch('http://localhost:8080/api/profile/password', {
+            await apiFetch('/profile/password', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
                 body: JSON.stringify({ old_password: oldPassword, new_password: newPassword })
             });
-            const data = await res.json().catch(() => ({}));
-            if (res.ok) {
-                setPasswordMessage({ text: 'Пароль успішно змінено', type: 'success' });
-                setOldPassword('');
-                setNewPassword('');
-            } else {
-                setPasswordMessage({ text: data.error || 'Невірний поточний пароль', type: 'error' });
-            }
-        } catch (error) {
-            setPasswordMessage({ text: 'Сталася помилка мережі', type: 'error' });
+
+            setPasswordMessage({ text: 'Пароль успішно змінено', type: 'success' });
+            setOldPassword('');
+            setNewPassword('');
+        } catch (error: any) {
+            setPasswordMessage({ text: error.message || 'Невірний поточний пароль', type: 'error' });
         }
         setTimeout(() => setPasswordMessage(null), 3000);
     };
@@ -206,7 +191,6 @@ export default function Profile() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                {/* ЛІВА КОЛОНКА - Інфо користувача */}
                 <div className="space-y-6 h-fit">
                     <div className="bg-surface border border-surfaceBorder rounded-3xl p-6 text-center">
                         <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -233,9 +217,7 @@ export default function Profile() {
                     </div>
                 </div>
 
-                {/* ПРАВА КОЛОНКА - Вкладки та контент */}
                 <div className="lg:col-span-3 space-y-6">
-                    {/* Перемикач вкладок */}
                     <div className="flex bg-surface border border-surfaceBorder rounded-xl p-1 w-fit">
                         <button
                             onClick={() => setActiveTab('overview')}
@@ -251,7 +233,6 @@ export default function Profile() {
                         </button>
                     </div>
 
-                    {/* КОНТЕНТ: Вкладка "ОГЛЯД" */}
                     {activeTab === 'overview' && (
                         <div className="space-y-6 animate-in fade-in duration-300">
                             {stats?.last_module && stats.last_module.id !== 0 && (
@@ -343,7 +324,6 @@ export default function Profile() {
                         </div>
                     )}
 
-                    {/* КОНТЕНТ: Вкладка "НАЛАШТУВАННЯ" */}
                     {activeTab === 'settings' && (
                         <div className="grid md:grid-cols-2 gap-6 animate-in fade-in duration-300">
                             <div className="bg-surface border border-surfaceBorder rounded-2xl p-6 shadow-sm h-fit">
