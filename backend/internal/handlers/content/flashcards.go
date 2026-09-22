@@ -89,9 +89,19 @@ func (h *ContentHandler) CreateFlashcard(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// ДОДАНО: Захист від JSON-бомб
+	r.Body = http.MaxBytesReader(w, r.Body, 1048576) // Макс 1 МБ
+
 	var req CreateFlashcardRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error": "Некоректний формат даних"}`, http.StatusBadRequest)
+		http.Error(w, `{"error": "Некоректний формат даних або запит завеликий"}`, http.StatusBadRequest)
+		return
+	}
+
+	// ДОДАНО: Захист від спаму великим текстом
+	if len(req.Question) > 1000 || len(req.Answer) > 1000 {
+		auth.LogSecurityAlert(h.DB, userID, "data_flooding", "Спроба створити картку з завеликим текстом (>1000 симв.)")
+		http.Error(w, `{"error": "Питання та відповідь не можуть перевищувати 1000 символів"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -121,5 +131,6 @@ func (h *ContentHandler) CreateFlashcard(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Картку успішно додано"})
 }

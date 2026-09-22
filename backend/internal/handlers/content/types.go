@@ -2,38 +2,19 @@ package content
 
 // --- СТРУКТУРИ ДЛЯ ВІДПОВІДЕЙ (GET) ---
 type ModuleResponse struct {
-    ID           int    `json:"id"`
-    Title        string `json:"title"`
-    Description  string `json:"description"`
-    Theory       string `json:"theory"`    // Обов'язково додайте це поле
-    InviteCode   string `json:"invite_code"`
-    StudentCount int    `json:"student_count"`
-    CreatedBy    int    `json:"created_by"`
+	ID           int    `json:"id"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	Theory       string `json:"theory"`
+	InviteCode   string `json:"invite_code"`
+	StudentCount int    `json:"student_count"`
+	CreatedBy    int    `json:"created_by"`
 }
 
 type FlashcardResponse struct {
 	ID       int    `json:"id"`
 	Question string `json:"question"`
 	Answer   string `json:"answer"`
-}
-
-type QuizResponse struct {
-	ID    int    `json:"id"`
-	Title string `json:"title"`
-}
-
-type QuestionResponse struct {
-	ID               int            `json:"id"`
-	QuestionText     string         `json:"question_text"`
-	Type             string         `json:"type"`
-	Options          []AnswerOption `json:"options"`
-	CorrectAnswerID  int            `json:"correct_answer_id,omitempty"`
-	CorrectAnswerIDs []int          `json:"correct_answer_ids,omitempty"`
-}
-
-type AnswerOption struct {
-	ID         int    `json:"id"`
-	AnswerText string `json:"answer_text"`
 }
 
 type ModuleStudentResponse struct {
@@ -43,10 +24,19 @@ type ModuleStudentResponse struct {
 	Email     string `json:"email"`
 }
 
+// Структура для питання, згенерованого "на льоту"
+type GeneratedTestQuestion struct {
+	FlashcardID int      `json:"flashcard_id"`
+	Question    string   `json:"question"`
+	Options     []string `json:"options"` // Правильна відповідь + 3 дистрактори (перемішані)
+	Answer      string   `json:"answer"`  // Правильна відповідь (для перевірки на фронтенді, або можна приховати і перевіряти на бекенді)
+}
+
 // --- СТРУКТУРИ ДЛЯ ЗАПИТІВ (POST) ---
 type CreateModuleRequest struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
+	Theory      string `json:"theory"`
 }
 
 type CreateFlashcardRequest struct {
@@ -55,19 +45,10 @@ type CreateFlashcardRequest struct {
 	Answer   string `json:"answer"`
 }
 
-type CreateQuizRequest struct {
-	ModuleID int    `json:"module_id"`
-	Title    string `json:"title"`
-}
-
-type CreateAnswerOptionRequest struct {
-	AnswerText string `json:"answer_text"`
-	IsCorrect  bool   `json:"is_correct"`
-}
-
-type CreateQuestionRequest struct {
-	QuizID       int                         `json:"quiz_id"`
-	QuestionText string                      `json:"question_text"`
-	Type         string                      `json:"type"`
-	Answers      []CreateAnswerOptionRequest `json:"answers"`
+// Структура для збереження результатів пройденого тесту
+type SubmitTestResultRequest struct {
+	ModuleID            int   `json:"module_id"`
+	Score               int   `json:"score"`
+	TotalQuestions      int   `json:"total_questions"`
+	MistakeFlashcardIDs []int `json:"mistake_flashcard_ids"` // Масив ID карток, в яких юзер помилився
 }

@@ -88,7 +88,7 @@ func main() {
 		w.Write([]byte("pong"))
 	})
 
-	// --- ЗАХИЩЕНІ МАРШРУТИ (додано db як перший аргумент до auth.Protect) ---
+	// --- ЗАХИЩЕНІ МАРШРУТИ ---
 	mux.HandleFunc("/api/me", auth.Protect(db, methodHandler("GET", userH.GetMe)))
 
 	mux.HandleFunc("/api/modules", auth.Protect(db, func(w http.ResponseWriter, r *http.Request) {
@@ -103,9 +103,10 @@ func main() {
 	}))
 
 	mux.HandleFunc("/api/modules/", auth.Protect(db, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut {
+		switch r.Method {
+		case http.MethodPut:
 			contentH.UpdateModule(w, r)
-		} else {
+		default:
 			http.Error(w, "Метод заборонено", http.StatusMethodNotAllowed)
 		}
 	}))
@@ -124,25 +125,11 @@ func main() {
 	mux.HandleFunc("/api/modules/students", auth.Protect(db, methodHandler("GET", contentH.GetModuleStudents)))
 	mux.HandleFunc("/api/modules/enroll", auth.Protect(db, methodHandler("POST", contentH.EnrollStudent)))
 
-	mux.HandleFunc("/api/quizzes", auth.Protect(db, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
-			contentH.GetQuizzes(w, r)
-		} else {
-			contentH.CreateQuiz(w, r)
-		}
-	}))
-
-	mux.HandleFunc("/api/quizzes/questions", auth.Protect(db, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
-			contentH.GetQuizQuestions(w, r)
-		} else {
-			contentH.CreateQuestion(w, r)
-		}
-	}))
-	mux.HandleFunc("/api/generate-quiz", auth.Protect(db, methodHandler("GET", contentH.GenerateQuiz)))
+	// --- ТРЕНУВАННЯ (Змінено відповідно до нової логіки) ---
+	mux.HandleFunc("/api/content/quiz/generate", auth.Protect(db, methodHandler("GET", contentH.GenerateQuiz)))
+	mux.HandleFunc("/api/content/quiz/submit", auth.Protect(db, methodHandler("POST", contentH.SubmitTestResult)))
 
 	// --- АНАЛІТИКА ТА ПРОФІЛЬ ---
-	mux.HandleFunc("/api/analytics/quiz/submit", auth.Protect(db, methodHandler("POST", analyticsH.SubmitQuizAttempt)))
 	mux.HandleFunc("/api/analytics/summary", auth.Protect(db, methodHandler("GET", analyticsH.GetSummary)))
 	mux.HandleFunc("/api/analytics/mistakes", auth.Protect(db, methodHandler("GET", analyticsH.GetActiveMistakes)))
 	mux.HandleFunc("/api/analytics/mistakes/resolve", auth.Protect(db, methodHandler("POST", analyticsH.ResolveMistake)))
@@ -155,23 +142,40 @@ func main() {
 	// --- ПРАКТИКА ТА АВТОКОМПЛІТ ---
 	mux.HandleFunc("/api/practice/chat", auth.Protect(db, methodHandler("POST", practiceHandler.ChatWithAI)))
 	mux.HandleFunc("/api/practice/generate-test", auth.Protect(db, methodHandler("POST", practiceHandler.GenerateAITest)))
-	mux.HandleFunc("/api/practice/mistakes/save", auth.Protect(db, methodHandler("POST", practiceHandler.SaveMistake)))
-	mux.HandleFunc("/api/practice/vocabulary/save", auth.Protect(db, methodHandler("POST", practiceHandler.SaveVocabulary)))
-	mux.HandleFunc("/api/practice/mistakes", auth.Protect(db, methodHandler("GET", practiceHandler.GetMyMistakes)))
+
+	// Роути для словника і ручних помилок (з ШІ-чату)
+	mux.HandleFunc("/api/practice/mistakes", auth.Protect(db, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			practiceHandler.GetMyMistakes(w, r)
+		case http.MethodPost:
+			practiceHandler.SaveMistake(w, r)
+		default:
+			http.Error(w, "Метод заборонено", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	mux.HandleFunc("/api/practice/vocab", auth.Protect(db, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			practiceHandler.GetMyVocabulary(w, r)
+		case http.MethodPost:
+			practiceHandler.SaveVocabulary(w, r)
+		default:
+			http.Error(w, "Метод заборонено", http.StatusMethodNotAllowed)
+		}
+	}))
+
 	mux.HandleFunc("/api/autocomplete", auth.Protect(db, methodHandler("GET", dictionary.AutocompleteHandler)))
 
 	// --- ПАНЕЛЬ АДМІНІСТРАТОРА ---
-
-	// 1. Отримання даних для таблиць
 	mux.HandleFunc("/api/admin/users", auth.Protect(db, auth.AdminOnly(db, methodHandler("GET", adminH.GetUsers))))
 	mux.HandleFunc("/api/admin/alerts", auth.Protect(db, auth.AdminOnly(db, methodHandler("GET", adminH.GetSecurityAlerts))))
-
-	// 2. Дії над користувачами та логами
 	mux.HandleFunc("/api/admin/alerts/resolve", auth.Protect(db, auth.AdminOnly(db, methodHandler("POST", adminH.ResolveAlert))))
 	mux.HandleFunc("/api/admin/users/ban", auth.Protect(db, auth.AdminOnly(db, methodHandler("POST", adminH.BanUser))))
 	mux.HandleFunc("/api/admin/users/restrict", auth.Protect(db, auth.AdminOnly(db, methodHandler("POST", adminH.RestrictFeature))))
 
-	// --- МАРШРУТИ ДЛЯ ЦІЛЕЙ (TO-DO) ---
+	// --- МАРШРУТИ ДЛЯ ЦІЛЕЙ ---
 	mux.HandleFunc("/api/profile/goals", auth.Protect(db, func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:

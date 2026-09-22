@@ -17,6 +17,7 @@ type User struct {
 	CreatedAt          time.Time       `json:"created_at"`
 	RestrictedFeatures json.RawMessage `json:"restricted_features"` // Зберігає JSON: {"chat": true}
 }
+
 type SecurityAlert struct {
 	ID           int       `json:"id"`
 	UserID       int       `json:"user_id"`
@@ -44,7 +45,7 @@ type Theory struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// Flashcard представляє картку для самоперевірки (підготовлено для TTS)
+// Flashcard представляє картку для самоперевірки
 type Flashcard struct {
 	ID        int       `json:"id"`
 	ModuleID  int       `json:"module_id"`
@@ -53,48 +54,23 @@ type Flashcard struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// Quiz представляє тест
-type Quiz struct {
-	ID        int       `json:"id"`
-	ModuleID  int       `json:"module_id"`
-	Title     string    `json:"title"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-// Question представляє питання в тесті
-type Question struct {
-	ID           int       `json:"id"`
-	QuizID       int       `json:"quiz_id"`
-	QuestionText string    `json:"question_text"`
-	Type         string    `json:"q_type"` // 'single', 'multiple', 'text'
-	CreatedAt    time.Time `json:"created_at"`
-}
-
-// Answer представляє варіант відповіді
-type Answer struct {
-	ID         int    `json:"id"`
-	QuestionID int    `json:"question_id"`
-	AnswerText string `json:"answer_text"`
-	IsCorrect  bool   `json:"is_correct"`
-}
-
-// QuizAttempt фіксує загальний результат проходження тесту
+// QuizAttempt фіксує загальний результат проходження тесту (для графіка)
 type QuizAttempt struct {
 	ID             int       `json:"id"`
 	UserID         int       `json:"user_id"`
-	QuizID         int       `json:"quiz_id"`
+	ModuleID       int       `json:"module_id"` // ТЕПЕР ТУТ ModuleID!
 	Score          int       `json:"score"`
 	TotalQuestions int       `json:"total_questions"`
 	CompletedAt    time.Time `json:"completed_at"`
 }
 
-// UserQuestionAttempt фіксує відповіді на конкретні питання (для роботи над помилками)
-type UserQuestionAttempt struct {
+// UserActiveMistake фіксує помилки користувача на рівні карток
+type UserActiveMistake struct {
 	ID          int       `json:"id"`
 	UserID      int       `json:"user_id"`
-	QuestionID  int       `json:"question_id"`
-	IsCorrect   bool      `json:"is_correct"`
-	AttemptedAt time.Time `json:"attempted_at"`
+	FlashcardID int       `json:"flashcard_id"`
+	ErrorCount  int       `json:"error_count"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type SavedMistake struct {
@@ -105,6 +81,7 @@ type SavedMistake struct {
 	RuleExplanation string    `json:"rule_explanation"`
 	CreatedAt       time.Time `json:"created_at"`
 }
+
 type SavedVocabulary struct {
 	ID              int       `json:"id"`
 	UserID          int       `json:"user_id"`

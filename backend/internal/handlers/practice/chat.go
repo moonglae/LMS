@@ -64,7 +64,7 @@ func (h *Handler) ChatWithAI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ВИПРАВЛЕНО: перевіряємо ключ "ai_chat" замість "chat"
+	// 1. ПЕРЕВІРКА ОБМЕЖЕНЬ АДМІНІСТРАТОРА
 	var restrictedFeatures string
 	err := h.DB.QueryRow("SELECT COALESCE(restricted_features::text, '{}') FROM users WHERE id = $1", userID).Scan(&restrictedFeatures)
 	if err == nil {
@@ -75,9 +75,30 @@ func (h *Handler) ChatWithAI(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// 2. АНТИСПАМ ПЕРЕВІРКА ДЛЯ ШІ (перевикористовуємо функцію з ai_generator.go)
+	if !checkAILimitAndLog(h.DB, userID) {
+		http.Error(w, `{"error": "Занадто багато запитів до ШІ. Будь ласка, зачекайте хвилину."}`, http.StatusTooManyRequests)
+		return
+	}
+
+	// 3. ЗАХИСТ ВІД JSON-БОМБ: Обмежуємо весь запит до 1 МБ
+	r.Body = http.MaxBytesReader(w, r.Body, 1048576)
+
 	var req ChatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error": "Некоректний формат запиту"}`, http.StatusBadRequest)
+		http.Error(w, `{"error": "Некоректний формат запиту або перевищено ліміт об'єму (макс. 1MB)"}`, http.StatusBadRequest)
+		return
+	}
+
+	// 4. ЗАХИСТ ВІД ДОВГОГО ТЕКСТУ: Обмежуємо повідомлення в чаті
+	req.Message = strings.TrimSpace(req.Message)
+	if len(req.Message) > 2000 {
+		auth.LogSecurityAlert(h.DB, userID, "payload_too_large", "Спроба відправити занадто довге повідомлення в ШІ-чат (>2000 символів)")
+		http.Error(w, `{"error": "Повідомлення занадто довге (максимум 2000 символів)"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Message == "" {
+		http.Error(w, `{"error": "Повідомлення не може бути порожнім"}`, http.StatusBadRequest)
 		return
 	}
 

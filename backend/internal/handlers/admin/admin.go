@@ -28,10 +28,9 @@ func NewAdminHandler(db *sql.DB) *AdminHandler {
 
 // BanUser: Повне блокування користувача
 func (h *AdminHandler) BanUser(w http.ResponseWriter, r *http.Request) {
-	// 1. Оголошуємо структуру, яка приймає reason!
 	var req struct {
 		Ban    bool   `json:"ban"`
-		Reason string `json:"reason"` // <--- ЦЕ ДУЖЕ ВАЖЛИВО
+		Reason string `json:"reason"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -41,7 +40,6 @@ func (h *AdminHandler) BanUser(w http.ResponseWriter, r *http.Request) {
 
 	userID := r.URL.Query().Get("id")
 
-	// 2. Оновлюємо і статус, і причину в базі
 	query := `UPDATE users SET is_banned = $1, ban_reason = $2 WHERE id = $3`
 	_, err := h.DB.Exec(query, req.Ban, req.Reason, userID)
 
@@ -58,7 +56,6 @@ func (h *AdminHandler) BanUser(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) RestrictFeature(w http.ResponseWriter, r *http.Request) {
 	targetUserID := r.URL.Query().Get("id")
 
-	// ЗАХИСТ: Перевірка на самоблокування функцій
 	adminID, _ := auth.GetUserID(r.Context())
 	targetIDInt, _ := strconv.Atoi(targetUserID)
 	if targetIDInt == adminID {
@@ -107,7 +104,6 @@ func (h *AdminHandler) ResolveAlert(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) GetUsers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// ВИДАЛЕНО ВІДОБРАЖЕННЯ АДМІНІСТРАТОРІВ ЧЕРЕЗ WHERE
 	query := `
         SELECT id, email, first_name, last_name, 
                COALESCE(role, 'student'), 

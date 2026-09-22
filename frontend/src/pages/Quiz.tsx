@@ -3,19 +3,21 @@ import { useNavigate, useParams, useSearchParams, useLocation } from 'react-rout
 import { CheckCircle, XCircle, Loader2, Shuffle as ShuffleIcon, Settings, List, Type } from 'lucide-react';
 import { apiFetch } from '../api';
 
+// 1. Структура того, що приходить з бекенду
+interface RawBackendQuestion {
+    flashcard_id: number;
+    question: string;
+    options: string[];
+    answer: string;
+}
+
+// 2. Структура для фронтенду після обробки режимів (choice/fill/mix)
 interface GeneratedQuestion {
-    id: number;
-    quiz_id: number;
+    flashcard_id: number;
     question_text: string;
     options: string[];
     correct: string;
-    source_id?: number;
-    type?: 'choice' | 'fill';
-}
-
-interface AnswerResult {
-    question_id: number;
-    is_correct: boolean;
+    type: 'choice' | 'fill';
 }
 
 type QuizPhase = 'loading' | 'setup' | 'testing';
@@ -31,7 +33,7 @@ export default function Quiz() {
 
     // Стан для налаштувань
     const [phase, setPhase] = useState<QuizPhase>('loading');
-    const [rawQuestions, setRawQuestions] = useState<GeneratedQuestion[]>([]);
+    const [rawQuestions, setRawQuestions] = useState<RawBackendQuestion[]>([]);
     const [mode, setMode] = useState<'choice' | 'fill' | 'mix'>('choice');
     const [limit, setLimit] = useState<number>(0);
 
@@ -39,7 +41,8 @@ export default function Quiz() {
     const [questions, setQuestions] = useState<GeneratedQuestion[]>([]);
     const [currentQ, setCurrentQ] = useState(0);
     const [score, setScore] = useState(0);
-    const [answers, setAnswers] = useState<AnswerResult[]>([]);
+    const [mistakeIds, setMistakeIds] = useState<number[]>([]); // НОВЕ: Збираємо ID карток з помилками
+
     const [isFinished, setIsFinished] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -50,18 +53,18 @@ export default function Quiz() {
     useEffect(() => {
         const fetchQuiz = async () => {
             try {
-                let data;
-                if (isMistakesMode) {
-                    const url = targetModuleId ? `/analytics/mistakes-quiz?module_id=${targetModuleId}` : '/analytics/mistakes-quiz';
-                    data = await apiFetch(url);
-                } else {
-                    if (!targetModuleId || Number.isNaN(Number(targetModuleId))) {
-                        setError('Невірний модуль.');
-                        setPhase('setup');
-                        return;
-                    }
-                    data = await apiFetch(`/generate-quiz?module_id=${targetModuleId}`);
+                if (!targetModuleId || Number.isNaN(Number(targetModuleId))) {
+                    setError('Невірний ідентифікатор модуля.');
+                    setPhase('setup');
+                    return;
                 }
+
+                // Використовуємо правильні роути бекенду
+                const url = isMistakesMode
+                    ? `/analytics/mistakes-quiz?module_id=${targetModuleId}`
+                    : `/content/quiz/generate?module_id=${targetModuleId}`;
+
+                const data = await apiFetch(url);
 
                 if (!data || data.length === 0) {
                     setError('Не вдалося знайти питання для цього тесту.');
@@ -78,7 +81,7 @@ export default function Quiz() {
         };
 
         fetchQuiz();
-    }, [id, targetModuleId, isMistakesMode]);
+    }, [targetModuleId, isMistakesMode]);
 
     // Відправка результатів на бекенд
     useEffect(() => {
@@ -86,13 +89,14 @@ export default function Quiz() {
             if (isFinished && questions.length > 0) {
                 setIsSaving(true);
                 try {
-                    await apiFetch('/analytics/quiz/submit', {
+                    // Відправляємо дані у форматі SubmitTestResultRequest
+                    await apiFetch('/content/quiz/submit', {
                         method: 'POST',
                         body: JSON.stringify({
-                            quiz_id: questions[0].quiz_id,
+                            module_id: Number(targetModuleId),
                             score: score,
                             total_questions: questions.length,
-                            answers: answers
+                            mistake_flashcard_ids: mistakeIds
                         })
                     });
                 } catch (err) {
@@ -103,60 +107,61 @@ export default function Quiz() {
             }
         };
         submitResults();
-    }, [isFinished, questions, score, answers]);
+    }, [isFinished, questions.length, score, mistakeIds, targetModuleId]);
 
     // Генерація тесту на основі обраних налаштувань
     const handleStart = () => {
         let expanded: GeneratedQuestion[] = [];
 
         rawQuestions.forEach((q) => {
-            const reverseCorrect = q.question_text; // Англійське слово
-            const reverseQuestionText = q.correct;  // Українське слово
+            // Пряме запитання (те, що згенерував бекенд)
+            const normalQ: GeneratedQuestion = {
+                flashcard_id: q.flashcard_id,
+                question_text: q.question,
+                correct: q.answer,
+                options: q.options,
+                type: 'choice'
+            };
 
-            // Генеруємо хибні варіанти для тестів
+            // Зворотне запитання (Укр -> Англ)
             const reverseOptions = rawQuestions
-                .map(item => item.question_text)
-                .filter((opt) => Boolean(opt) && opt !== reverseCorrect)
+                .map(item => item.question)
+                .filter((opt) => opt !== q.question)
                 .sort(() => Math.random() - 0.5)
                 .slice(0, 3);
-            const optionsForChoice = [reverseCorrect, ...reverseOptions].sort(() => Math.random() - 0.5);
+
+            const optionsForReverse = [q.question, ...reverseOptions].sort(() => Math.random() - 0.5);
+
+            const reverseQ: GeneratedQuestion = {
+                flashcard_id: q.flashcard_id,
+                question_text: q.answer,
+                correct: q.question,
+                options: optionsForReverse,
+                type: 'choice'
+            };
+
+            // Питання на вписування
+            const fillQ: GeneratedQuestion = {
+                flashcard_id: q.flashcard_id,
+                question_text: q.answer,
+                correct: q.question,
+                options: [],
+                type: 'fill'
+            };
 
             if (mode === 'choice') {
-                // 2 питання: Англ->Укр (choice) + Укр->Англ (choice)
-                expanded.push({ ...q, type: 'choice' });
-                if (reverseQuestionText && reverseCorrect) {
-                    expanded.push({
-                        ...q, id: q.id + 1000000, source_id: q.source_id ?? q.id,
-                        question_text: reverseQuestionText, correct: reverseCorrect,
-                        options: optionsForChoice, type: 'choice'
-                    });
-                }
+                expanded.push(normalQ);
+                expanded.push(reverseQ);
             } else if (mode === 'fill') {
-                // 1 питання: Укр->Англ (вписування)
-                if (reverseQuestionText && reverseCorrect) {
-                    expanded.push({
-                        ...q, id: q.id + 2000000, source_id: q.source_id ?? q.id,
-                        question_text: reverseQuestionText, correct: reverseCorrect,
-                        options: [], type: 'fill'
-                    });
-                }
+                expanded.push(fillQ);
             } else if (mode === 'mix') {
-                // Мікс: випадково обираємо тип завдання
                 const rand = Math.random();
                 if (rand < 0.33) {
-                    expanded.push({ ...q, type: 'choice' });
-                } else if (rand < 0.66 && reverseQuestionText && reverseCorrect) {
-                    expanded.push({
-                        ...q, id: q.id + 1000000, source_id: q.source_id ?? q.id,
-                        question_text: reverseQuestionText, correct: reverseCorrect,
-                        options: optionsForChoice, type: 'choice'
-                    });
-                } else if (reverseQuestionText && reverseCorrect) {
-                    expanded.push({
-                        ...q, id: q.id + 2000000, source_id: q.source_id ?? q.id,
-                        question_text: reverseQuestionText, correct: reverseCorrect,
-                        options: [], type: 'fill'
-                    });
+                    expanded.push(normalQ);
+                } else if (rand < 0.66) {
+                    expanded.push(reverseQ);
+                } else {
+                    expanded.push(fillQ);
                 }
             }
         });
@@ -177,8 +182,18 @@ export default function Quiz() {
             ? selectedOption.trim().toLowerCase() === question.correct.toLowerCase()
             : selectedOption === question.correct;
 
-        setAnswers(prev => [...prev, { question_id: question.source_id ?? question.id, is_correct: isCorrect }]);
-        if (isCorrect) setScore((prev) => prev + 1);
+        if (isCorrect) {
+            setScore((prev) => prev + 1);
+        } else {
+            // Зберігаємо ID картки, в якій зроблено помилку
+            setMistakeIds(prev => {
+                if (!prev.includes(question.flashcard_id)) {
+                    return [...prev, question.flashcard_id];
+                }
+                return prev;
+            });
+        }
+
         setFillAnswer('');
 
         if (currentQ < questions.length - 1) {
@@ -197,8 +212,6 @@ export default function Quiz() {
         if (currentQ >= questions.length - 1) return;
 
         setIsShuffling(true);
-
-        // Перемішуємо тільки залишок невідповіданих питань, не чіпаючи минулі
         const pastQuestions = questions.slice(0, currentQ);
         const remainingQuestions = questions.slice(currentQ);
         const shuffledRemaining = [...remainingQuestions].sort(() => Math.random() - 0.5);
@@ -297,7 +310,7 @@ export default function Quiz() {
                 {score === questions.length ? <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" /> : <XCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />}
                 <h2 className="text-2xl font-bold mb-2">Тест завершено!</h2>
                 <p className="text-textMuted mb-6">Ваш результат: {score} з {questions.length}</p>
-                <button onClick={() => navigate(isMistakesMode ? '/mistakes' : '/')} className="w-full bg-primary py-3 rounded-xl text-white font-semibold">
+                <button onClick={() => navigate(isMistakesMode ? '/mistakes' : '/')} className="w-full bg-primary py-3 rounded-xl text-white font-semibold hover:bg-primaryHover transition-colors">
                     {isMistakesMode ? 'Перевірити помилки' : 'На головну'}
                 </button>
             </div>

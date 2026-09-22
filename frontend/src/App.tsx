@@ -15,6 +15,7 @@ import TheoryView from './pages/TheoryView';
 import AIChat from './pages/AIChat';
 import AITest from './pages/AITest';
 import AdminDashboard from './pages/AdminDashboard';
+import ChatNotebook from './pages/ChatNotebook'; // <--- ДОДАНО ІМПОРТ ЗОШИТА
 
 function App() {
   const { isAuthenticated, user, isCheckingAuth, checkAuth, logout } = useAuthStore();
@@ -43,7 +44,7 @@ function App() {
           <p className="text-textMuted mb-6 text-lg">Ваш доступ до системи обмежено адміністратором.</p>
 
           {/* БЛОК З ПРИЧИНОЮ */}
-          {user.ban_reason && (
+          {user?.ban_reason && (
             <div className="w-full bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-8 text-left">
               <span className="block text-xs font-bold text-red-400 uppercase tracking-wider mb-1">
                 Причина блокування:
@@ -90,16 +91,12 @@ function App() {
         >
           <Route index element={<Dashboard />} />
           <Route path="dashboard" element={<Dashboard />} />
-
           <Route path="admin" element={<AdminDashboard />} />
-
           <Route path="modules/:id/flashcards" element={<Flashcards />} />
           <Route path="modules/:id/quiz" element={<Quiz />} />
           <Route path="modules/:id/theory" element={<TheoryView />} />
-
           <Route path="module/new" element={<ModuleEditor />} />
           <Route path="module/:id/edit" element={<ModuleEditor />} />
-
           <Route path="mistakes" element={<Mistakes />} />
           <Route path="quiz/mistakes" element={<Quiz />} />
           <Route path="quiz/:id" element={<Quiz />} />
@@ -107,6 +104,9 @@ function App() {
 
           <Route path="practice/chat" element={<AIChat />} />
           <Route path="practice/ai-test" element={<AITest />} />
+
+          {/* НОВИЙ МАРШРУТ ЗОШИТА */}
+          <Route path="notebook" element={<ChatNotebook />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

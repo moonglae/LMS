@@ -17,6 +17,9 @@ func (h *ContentHandler) EnrollStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ДОДАНО: Захист від JSON-бомб (обмежуємо тіло запиту до невеликого розміру)
+	r.Body = http.MaxBytesReader(w, r.Body, 1024) // 1 KB для маленького запиту
+
 	var req struct {
 		InviteCode string `json:"invite_code"`
 	}
