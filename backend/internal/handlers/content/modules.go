@@ -23,20 +23,20 @@ func (h *ContentHandler) GetModules(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := fmt.Sprintf(`
-        SELECT DISTINCT
-            m.id, 
-            m.title, 
-            m.description, 
-            m.theory, 
-            COALESCE(m.invite_code, '') AS invite_code,
-            COUNT(DISTINCT e.user_id) AS student_count,
-            m.created_by
-        FROM modules m
-        LEFT JOIN enrollments e ON m.id = e.module_id
-        WHERE m.created_by = %d OR e.user_id = %d
-        GROUP BY m.id, m.title, m.description, m.theory, m.invite_code, m.created_by
-        ORDER BY m.id DESC
-    `, userID, userID)
+		SELECT DISTINCT
+			m.id, 
+			m.title, 
+			m.description, 
+			m.theory, 
+			COALESCE(m.invite_code, '') AS invite_code,
+			COUNT(DISTINCT e.user_id) AS student_count,
+			m.created_by
+		FROM modules m
+		LEFT JOIN enrollments e ON m.id = e.module_id
+		WHERE m.created_by = %d OR e.user_id = %d
+		GROUP BY m.id, m.title, m.description, m.theory, m.invite_code, m.created_by
+		ORDER BY m.id DESC
+	`, userID, userID)
 
 	rows, err := h.DB.Query(query)
 	if err != nil {
@@ -82,12 +82,12 @@ func (h *ContentHandler) GetModuleStudents(w http.ResponseWriter, r *http.Reques
 	}
 
 	studentsQuery := fmt.Sprintf(`
-        SELECT u.id, u.first_name, u.last_name, u.email
-        FROM users u
-        JOIN enrollments e ON u.id = e.user_id
-        WHERE e.module_id = %d
-        ORDER BY u.last_name
-    `, moduleID)
+		SELECT u.id, u.first_name, u.last_name, u.email
+		FROM users u
+		JOIN enrollments e ON u.id = e.user_id
+		WHERE e.module_id = %d
+		ORDER BY u.last_name
+	`, moduleID)
 
 	rows, err := h.DB.Query(studentsQuery)
 	if err != nil {
@@ -283,8 +283,13 @@ func (h *ContentHandler) UpdateModule(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+<<<<<<< HEAD
 			_, err = tx.Exec("INSERT INTO flashcards (module_id, created_by, question, answer) VALUES ($1, $2, $3, $4)", // ВИПРАВЛЕННЯ: додано created_by
 				moduleID, userID, card.Question, card.Answer)
+=======
+			_, err = tx.Exec("INSERT INTO flashcards (module_id, question, answer) VALUES ($1, $2, $3)",
+				moduleID, card.Question, card.Answer)
+>>>>>>> 8b23012760078f2d367a0fc14421fb428963ef5f
 			if err != nil {
 				http.Error(w, `{"error": "Помилка збереження картки"}`, http.StatusInternalServerError)
 				return
