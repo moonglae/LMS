@@ -1,0 +1,19 @@
+CREATE TABLE IF NOT EXISTS "saved_mistakes" (
+	"id" serial PRIMARY KEY,
+	"user_id" integer NOT NULL,
+	"wrong_text" text NOT NULL,
+	"correct_text" text NOT NULL,
+	"rule_explanation" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "saved_mistakes_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS "saved_vocabulary" (
+	"id" serial PRIMARY KEY,
+	"user_id" integer NOT NULL,
+	"word" varchar(255) NOT NULL,
+	"translation" varchar(255) NOT NULL,
+	"context_sentence" text,
+	"created_at" timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "saved_vocabulary_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE
+);

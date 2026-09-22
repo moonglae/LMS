@@ -201,7 +201,7 @@ func (h *ContentHandler) UpdateModule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var ownerID int
-	err = h.DB.QueryRow("SELECT created_by FROM modules WHERE id = $1", moduleID).Scan(&ownerID) // ВИПРАВЛЕННЯ: user_id -> created_by
+	err = h.DB.QueryRow("SELECT created_by FROM modules WHERE id = $1", moduleID).Scan(&ownerID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, `{"error": "Модуль не знайдено"}`, http.StatusNotFound)
@@ -247,7 +247,7 @@ func (h *ContentHandler) UpdateModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ЛОГУВАННЯ: Захист від спаму великими обсягами даних (Вирівняно ліміт до 10000)
+	// ЛОГУВАННЯ: Захист від спаму великими обсягами даних
 	if len(req.Cards) > 50 || len(req.Theory) > 10000 {
 		auth.LogSecurityAlert(h.DB, userID, "data_flooding", "Спроба оновити модуль аномально великим об'ємом даних")
 		http.Error(w, `{"error": "Перевищено ліміт об'єму даних. Максимум 50 карток та 10000 символів теорії."}`, http.StatusRequestEntityTooLarge)
@@ -283,13 +283,8 @@ func (h *ContentHandler) UpdateModule(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-<<<<<<< HEAD
-			_, err = tx.Exec("INSERT INTO flashcards (module_id, created_by, question, answer) VALUES ($1, $2, $3, $4)", // ВИПРАВЛЕННЯ: додано created_by
+			_, err = tx.Exec("INSERT INTO flashcards (module_id, created_by, question, answer) VALUES ($1, $2, $3, $4)",
 				moduleID, userID, card.Question, card.Answer)
-=======
-			_, err = tx.Exec("INSERT INTO flashcards (module_id, question, answer) VALUES ($1, $2, $3)",
-				moduleID, card.Question, card.Answer)
->>>>>>> 8b23012760078f2d367a0fc14421fb428963ef5f
 			if err != nil {
 				http.Error(w, `{"error": "Помилка збереження картки"}`, http.StatusInternalServerError)
 				return

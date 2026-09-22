@@ -198,3 +198,51 @@ func (h *Handler) GetMyVocabulary(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(vocab)
 }
+func (h *Handler) DeleteVocabulary(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	userID, ok := auth.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, `{"error": "Неавторизований доступ"}`, http.StatusUnauthorized)
+		return
+	}
+
+	vocabID := r.URL.Query().Get("id")
+	if vocabID == "" {
+		http.Error(w, `{"error": "Відсутній ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	_, err := h.DB.Exec("DELETE FROM saved_vocabulary WHERE id = $1 AND user_id = $2", vocabID, userID)
+	if err != nil {
+		log.Printf("Помилка видалення слова: %v", err)
+		http.Error(w, `{"error": "Помилка сервера"}`, http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+// Видалення збереженої помилки
+func (h *Handler) DeleteMistake(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	userID, ok := auth.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, `{"error": "Неавторизований доступ"}`, http.StatusUnauthorized)
+		return
+	}
+
+	mistakeID := r.URL.Query().Get("id")
+	if mistakeID == "" {
+		http.Error(w, `{"error": "Відсутній ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	_, err := h.DB.Exec("DELETE FROM saved_mistakes WHERE id = $1 AND user_id = $2", mistakeID, userID)
+	if err != nil {
+		log.Printf("Помилка видалення помилки: %v", err)
+		http.Error(w, `{"error": "Помилка сервера"}`, http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}

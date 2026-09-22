@@ -125,7 +125,7 @@ func main() {
 	mux.HandleFunc("/api/modules/students", auth.Protect(db, methodHandler("GET", contentH.GetModuleStudents)))
 	mux.HandleFunc("/api/modules/enroll", auth.Protect(db, methodHandler("POST", contentH.EnrollStudent)))
 
-	// --- ТРЕНУВАННЯ (Змінено відповідно до нової логіки) ---
+	// --- ТРЕНУВАННЯ ---
 	mux.HandleFunc("/api/content/quiz/generate", auth.Protect(db, methodHandler("GET", contentH.GenerateQuiz)))
 	mux.HandleFunc("/api/content/quiz/submit", auth.Protect(db, methodHandler("POST", contentH.SubmitTestResult)))
 
@@ -143,24 +143,29 @@ func main() {
 	mux.HandleFunc("/api/practice/chat", auth.Protect(db, methodHandler("POST", practiceHandler.ChatWithAI)))
 	mux.HandleFunc("/api/practice/generate-test", auth.Protect(db, methodHandler("POST", practiceHandler.GenerateAITest)))
 
-	// Роути для словника і ручних помилок (з ШІ-чату)
-	mux.HandleFunc("/api/practice/mistakes", auth.Protect(db, func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			practiceHandler.GetMyMistakes(w, r)
-		case http.MethodPost:
-			practiceHandler.SaveMistake(w, r)
-		default:
-			http.Error(w, "Метод заборонено", http.StatusMethodNotAllowed)
-		}
-	}))
-
+	// Роути для словника з підтримкою DELETE, GET, POST
 	mux.HandleFunc("/api/practice/vocab", auth.Protect(db, func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			practiceHandler.GetMyVocabulary(w, r)
 		case http.MethodPost:
 			practiceHandler.SaveVocabulary(w, r)
+		case http.MethodDelete:
+			practiceHandler.DeleteVocabulary(w, r)
+		default:
+			http.Error(w, "Метод заборонено", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	// Роути для збережених помилок з підтримкою DELETE, GET, POST
+	mux.HandleFunc("/api/practice/mistakes", auth.Protect(db, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			practiceHandler.GetMyMistakes(w, r)
+		case http.MethodPost:
+			practiceHandler.SaveMistake(w, r)
+		case http.MethodDelete:
+			practiceHandler.DeleteMistake(w, r)
 		default:
 			http.Error(w, "Метод заборонено", http.StatusMethodNotAllowed)
 		}

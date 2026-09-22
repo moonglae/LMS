@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, BookOpen, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, BookOpen, AlertCircle, Loader2, Trash2 } from 'lucide-react';
 import { apiFetch } from '../api';
 
 type Mistake = {
@@ -28,23 +28,43 @@ export default function ChatNotebook() {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        const fetchData = async () => {
-            setIsLoading(true);
-            try {
-                const [mistakesData, vocabData] = await Promise.all([
-                    apiFetch('/practice/mistakes'),
-                    apiFetch('/practice/vocab')
-                ]);
-                setMistakes(Array.isArray(mistakesData) ? mistakesData : []);
-                setVocab(Array.isArray(vocabData) ? vocabData : []);
-            } catch (error) {
-                console.error("Помилка завантаження зошита", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
         fetchData();
     }, []);
+
+    const fetchData = async () => {
+        setIsLoading(true);
+        try {
+            const [mistakesData, vocabData] = await Promise.all([
+                apiFetch('/practice/mistakes'),
+                apiFetch('/practice/vocab')
+            ]);
+            setMistakes(Array.isArray(mistakesData) ? mistakesData : []);
+            setVocab(Array.isArray(vocabData) ? vocabData : []);
+        } catch (error) {
+            console.error("Помилка завантаження зошита", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // --- ФУНКЦІЇ ВИДАЛЕННЯ ---
+    const handleDeleteVocab = async (id: number) => {
+        try {
+            await apiFetch(`/practice/vocab?id=${id}`, { method: 'DELETE' });
+            setVocab(prev => prev.filter(v => v.id !== id));
+        } catch (error) {
+            alert('Не вдалося видалити слово');
+        }
+    };
+
+    const handleDeleteMistake = async (id: number) => {
+        try {
+            await apiFetch(`/practice/mistakes?id=${id}`, { method: 'DELETE' });
+            setMistakes(prev => prev.filter(m => m.id !== id));
+        } catch (error) {
+            alert('Не вдалося видалити помилку');
+        }
+    };
 
     return (
         <div className="max-w-4xl mx-auto p-6 mt-8 space-y-6">
@@ -84,11 +104,23 @@ export default function ChatNotebook() {
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {vocab.map(v => (
-                                    <div key={v.id} className="bg-surface border border-surfaceBorder p-5 rounded-2xl">
-                                        <h3 className="text-xl font-bold text-primary mb-1">{v.word}</h3>
-                                        <p className="text-textMain font-medium mb-3">{v.translation}</p>
+                                    <div key={v.id} className="bg-surface border border-surfaceBorder p-5 rounded-2xl relative group flex flex-col justify-between">
+                                        <div>
+                                            <div className="flex justify-between items-start mb-1">
+                                                <h3 className="text-xl font-bold text-primary">{v.word}</h3>
+                                                {/* КНОПКА ВИДАЛЕННЯ СЛОВА */}
+                                                <button
+                                                    onClick={() => handleDeleteVocab(v.id)}
+                                                    className="text-textMuted hover:text-red-400 p-1.5 rounded-lg transition-colors"
+                                                    title="Видалити зі словника"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                            <p className="text-textMain font-medium mb-3">{v.translation}</p>
+                                        </div>
                                         {v.context_sentence && (
-                                            <p className="text-sm text-textMuted bg-mainBg p-3 rounded-xl border border-surfaceBorder italic">"{v.context_sentence}"</p>
+                                            <p className="text-sm text-textMuted bg-mainBg p-3 rounded-xl border border-surfaceBorder italic mt-2">"{v.context_sentence}"</p>
                                         )}
                                     </div>
                                 ))}
@@ -102,10 +134,20 @@ export default function ChatNotebook() {
                         ) : (
                             <div className="space-y-4">
                                 {mistakes.map(m => (
-                                    <div key={m.id} className="bg-surface border border-surfaceBorder p-5 rounded-2xl flex flex-col gap-3">
-                                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6">
-                                            <span className="text-red-400 line-through">✕ {m.wrong_text}</span>
-                                            <span className="text-green-400 font-bold">✓ {m.correct_text}</span>
+                                    <div key={m.id} className="bg-surface border border-surfaceBorder p-5 rounded-2xl flex flex-col gap-3 relative">
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6">
+                                                <span className="text-red-400 line-through">✕ {m.wrong_text}</span>
+                                                <span className="text-green-400 font-bold">✓ {m.correct_text}</span>
+                                            </div>
+                                            {/* КНОПКА ВИДАЛЕННЯ ПОМИЛКИ */}
+                                            <button
+                                                onClick={() => handleDeleteMistake(m.id)}
+                                                className="text-textMuted hover:text-red-400 p-1.5 rounded-lg transition-colors"
+                                                title="Видалити помилку"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
                                         </div>
                                         <div className="text-sm text-blue-300 bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl">
                                             <span className="font-bold mr-1">Правило:</span>{m.rule_explanation}
