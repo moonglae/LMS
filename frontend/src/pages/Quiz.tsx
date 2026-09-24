@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { CheckCircle, XCircle, Loader2, Shuffle as ShuffleIcon, Settings, List, Type } from 'lucide-react';
 import { apiFetch } from '../api';
@@ -20,7 +20,7 @@ interface GeneratedQuestion {
     type: 'choice' | 'fill';
 }
 
-type QuizPhase = 'loading' | 'setup' | 'testing';
+type QuizPhase = 'loading' | 'setup' | 'testing' | 'error';
 
 export default function Quiz() {
     const { id } = useParams();
@@ -41,13 +41,23 @@ export default function Quiz() {
     const [questions, setQuestions] = useState<GeneratedQuestion[]>([]);
     const [currentQ, setCurrentQ] = useState(0);
     const [score, setScore] = useState(0);
-    const [mistakeIds, setMistakeIds] = useState<number[]>([]); // НОВЕ: Збираємо ID карток з помилками
+    const [mistakeIds, setMistakeIds] = useState<number[]>([]); // Збираємо ID карток з помилками
 
     const [isFinished, setIsFinished] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isShuffling, setIsShuffling] = useState(false);
     const [fillAnswer, setFillAnswer] = useState('');
+
+    // ВИПРАВЛЕННЯ: Вираховуємо максимальну кількість питань для поточного режиму
+    const maxQuestions = rawQuestions.length * (mode === 'choice' ? 2 : 1);
+
+    // ВИПРАВЛЕННЯ: Скидаємо ліміт до "Всі слова", якщо при зміні режиму поточний ліміт перевищує максимум
+    useEffect(() => {
+        if (limit > 0 && limit > maxQuestions) {
+            setLimit(0);
+        }
+    }, [mode, maxQuestions, limit]);
 
     // Завантажуємо "сирі" слова з бази
     useEffect(() => {
@@ -75,8 +85,12 @@ export default function Quiz() {
                 setRawQuestions(data);
                 setPhase('setup');
             } catch (err: any) {
-                setError(err.message || 'Помилка завантаження.');
-                setPhase('setup');
+                const errorMessage = err.message === 'Помилка запиту'
+                    ? 'У цьому модулі замало карток для створення тесту. Будь ласка, додайте ще кілька слів (бажано мінімум 4).'
+                    : err.message;
+
+                setError(errorMessage);
+                setPhase('error');
             }
         };
 
@@ -284,10 +298,11 @@ export default function Quiz() {
                             onChange={(e) => setLimit(Number(e.target.value))}
                             className="w-full p-3 bg-mainBg border border-surfaceBorder rounded-xl outline-none text-textMain focus:border-primary transition-colors"
                         >
-                            <option value={0}>Всі слова ({rawQuestions.length * (mode === 'choice' ? 2 : 1)} питань)</option>
-                            <option value={10}>10 питань</option>
-                            <option value={20}>20 питань</option>
-                            <option value={30}>30 питань</option>
+                            <option value={0}>Всі слова ({maxQuestions} питань)</option>
+                            {/* ВИПРАВЛЕННЯ: Показуємо опції тільки якщо карток вистачає */}
+                            {maxQuestions >= 10 && <option value={10}>10 питань</option>}
+                            {maxQuestions >= 20 && <option value={20}>20 питань</option>}
+                            {maxQuestions >= 30 && <option value={30}>30 питань</option>}
                         </select>
                     </div>
 
