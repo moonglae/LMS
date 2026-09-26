@@ -50,5 +50,6 @@ type SubmitTestResultRequest struct {
 	ModuleID            int   `json:"module_id"`
 	Score               int   `json:"score"`
 	TotalQuestions      int   `json:"total_questions"`
-	MistakeFlashcardIDs []int `json:"mistake_flashcard_ids"` // Масив ID карток, в яких юзер помилився
+	MistakeFlashcardIDs []int `json:"mistake_flashcard_ids"`
+	CorrectFlashcardIDs []int `json:"correct_flashcard_ids"`
 }

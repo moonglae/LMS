@@ -49,10 +49,10 @@ export default function Quiz() {
     const [isShuffling, setIsShuffling] = useState(false);
     const [fillAnswer, setFillAnswer] = useState('');
 
-    // ВИПРАВЛЕННЯ: Вираховуємо максимальну кількість питань для поточного режиму
+    // Вираховуємо максимальну кількість питань для поточного режиму
     const maxQuestions = rawQuestions.length * (mode === 'choice' ? 2 : 1);
 
-    // ВИПРАВЛЕННЯ: Скидаємо ліміт до "Всі слова", якщо при зміні режиму поточний ліміт перевищує максимум
+    // Скидаємо ліміт до "Всі слова", якщо при зміні режиму поточний ліміт перевищує максимум
     useEffect(() => {
         if (limit > 0 && limit > maxQuestions) {
             setLimit(0);
@@ -65,7 +65,7 @@ export default function Quiz() {
             try {
                 if (!targetModuleId || Number.isNaN(Number(targetModuleId))) {
                     setError('Невірний ідентифікатор модуля.');
-                    setPhase('setup');
+                    setPhase('error');
                     return;
                 }
 
@@ -77,8 +77,12 @@ export default function Quiz() {
                 const data = await apiFetch(url);
 
                 if (!data || data.length === 0) {
-                    setError('Не вдалося знайти питання для цього тесту.');
-                    setPhase('setup');
+                    if (isMistakesMode) {
+                        setError('У цьому модулі всі помилки вже виправлено! 🎉');
+                    } else {
+                        setError('Не вдалося знайти питання для цього тесту. Додайте мінімум 4 картки.');
+                    }
+                    setPhase('error');
                     return;
                 }
 
@@ -103,6 +107,15 @@ export default function Quiz() {
             if (isFinished && questions.length > 0) {
                 setIsSaving(true);
                 try {
+                    // Збираємо всі унікальні ID карток з цього тесту
+                    const testedIds = Array.from(new Set(questions.map(q => q.flashcard_id)));
+
+                    // Правильні = всі тестовані мінус ті, в яких була помилка
+                    const correctIds = testedIds.filter(id => !mistakeIds.includes(id));
+
+                    // Унікальні помилки (щоб не відправляти дублі)
+                    const uniqueMistakes = Array.from(new Set(mistakeIds));
+
                     // Відправляємо дані у форматі SubmitTestResultRequest
                     await apiFetch('/content/quiz/submit', {
                         method: 'POST',
@@ -110,7 +123,8 @@ export default function Quiz() {
                             module_id: Number(targetModuleId),
                             score: score,
                             total_questions: questions.length,
-                            mistake_flashcard_ids: mistakeIds
+                            mistake_flashcard_ids: uniqueMistakes,
+                            correct_flashcard_ids: correctIds // <--- ДОДАЛИ ПОЛЕ ДЛЯ ВИДАЛЕННЯ ПОМИЛОК
                         })
                     });
                 } catch (err) {
@@ -121,7 +135,7 @@ export default function Quiz() {
             }
         };
         submitResults();
-    }, [isFinished, questions.length, score, mistakeIds, targetModuleId]);
+    }, [isFinished, questions, score, mistakeIds, targetModuleId]);
 
     // Генерація тесту на основі обраних налаштувань
     const handleStart = () => {
@@ -244,8 +258,13 @@ export default function Quiz() {
     if (error && phase !== 'setup') {
         return (
             <div className="max-w-md mx-auto mt-20 bg-red-500/10 border border-red-500/20 rounded-3xl p-8 text-red-400 text-center">
-                {error}
-                <button onClick={() => navigate(isMistakesMode ? '/mistakes' : '/')} className="block w-full mt-4 bg-primary text-white py-2 rounded-xl">Назад</button>
+                <p className="font-medium text-lg">{error}</p>
+                <button
+                    onClick={() => navigate(isMistakesMode ? '/mistakes' : '/')}
+                    className="block w-full mt-6 bg-primary text-white py-3 font-semibold rounded-xl hover:bg-primaryHover transition-colors"
+                >
+                    Назад
+                </button>
             </div>
         );
     }
@@ -299,7 +318,6 @@ export default function Quiz() {
                             className="w-full p-3 bg-mainBg border border-surfaceBorder rounded-xl outline-none text-textMain focus:border-primary transition-colors"
                         >
                             <option value={0}>Всі слова ({maxQuestions} питань)</option>
-                            {/* ВИПРАВЛЕННЯ: Показуємо опції тільки якщо карток вистачає */}
                             {maxQuestions >= 10 && <option value={10}>10 питань</option>}
                             {maxQuestions >= 20 && <option value={20}>20 питань</option>}
                             {maxQuestions >= 30 && <option value={30}>30 питань</option>}
@@ -325,7 +343,10 @@ export default function Quiz() {
                 {score === questions.length ? <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" /> : <XCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />}
                 <h2 className="text-2xl font-bold mb-2">Тест завершено!</h2>
                 <p className="text-textMuted mb-6">Ваш результат: {score} з {questions.length}</p>
-                <button onClick={() => navigate(isMistakesMode ? '/mistakes' : '/')} className="w-full bg-primary py-3 rounded-xl text-white font-semibold hover:bg-primaryHover transition-colors">
+                <button
+                    onClick={() => navigate(isMistakesMode ? '/mistakes' : '/')}
+                    className="w-full bg-primary py-3 rounded-xl text-white font-semibold hover:bg-primaryHover transition-colors"
+                >
                     {isMistakesMode ? 'Перевірити помилки' : 'На головну'}
                 </button>
             </div>

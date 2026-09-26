@@ -89,7 +89,7 @@ func (h *ContentHandler) GenerateQuiz(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(generatedTest)
 }
 
-// SubmitTestResult зберігає фінальний бал та записує помилки
+// SubmitTestResult зберігає фінальний бал та записує помилки (і ВИДАЛЯЄ виправлені)
 func (h *ContentHandler) SubmitTestResult(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	userID, ok := auth.GetUserID(r.Context())
@@ -130,14 +130,27 @@ func (h *ContentHandler) SubmitTestResult(w http.ResponseWriter, r *http.Request
 	// 2. Зберігаємо помилки (Upsert: якщо помилка вже є - збільшуємо лічильник, якщо ні - додаємо)
 	for _, flashcardID := range req.MistakeFlashcardIDs {
 		_, err = tx.Exec(`
-            INSERT INTO user_active_mistakes (user_id, flashcard_id, error_count) 
-            VALUES ($1, $2, 1)
-            ON CONFLICT (user_id, flashcard_id) 
-            DO UPDATE SET error_count = user_active_mistakes.error_count + 1
-        `, userID, flashcardID)
+			INSERT INTO user_active_mistakes (user_id, flashcard_id, error_count) 
+			VALUES ($1, $2, 1)
+			ON CONFLICT (user_id, flashcard_id) 
+			DO UPDATE SET error_count = user_active_mistakes.error_count + 1
+		`, userID, flashcardID)
 		if err != nil {
 			log.Printf("SubmitTestResult mistake error for flashcard %d: %v", flashcardID, err)
 			http.Error(w, `{"error": "Помилка збереження помилок"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// 3. НОВЕ: ВИДАЛЯЄМО правильні відповіді з таблиці помилок
+	for _, flashcardID := range req.CorrectFlashcardIDs {
+		_, err = tx.Exec(`
+			DELETE FROM user_active_mistakes 
+			WHERE user_id = $1 AND flashcard_id = $2
+		`, userID, flashcardID)
+		if err != nil {
+			log.Printf("SubmitTestResult clear mistake error for flashcard %d: %v", flashcardID, err)
+			http.Error(w, `{"error": "Помилка очищення виправлених помилок"}`, http.StatusInternalServerError)
 			return
 		}
 	}
