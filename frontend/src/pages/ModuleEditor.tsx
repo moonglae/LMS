@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Trash2, Plus, Loader2, Save, ArrowLeft, BookOpen } from 'lucide-react';
 import { apiFetch } from '../api';
-import AutocompleteInput from '../components/AutocompleteInput'; // Переконайся, що шлях правильний!
+import AutocompleteInput from '../components/AutocompleteInput'; 
 
 export default function ModuleEditor() {
     const { id } = useParams();

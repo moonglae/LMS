@@ -1,31 +1,15 @@
--- 1. Видаляємо таблиці та зв'язки, які більше не потрібні
-DROP TABLE IF EXISTS "answers" CASCADE;
-DROP TABLE IF EXISTS "user_question_attempts" CASCADE;
-DROP TABLE IF EXISTS "user_flashcard_progress" CASCADE;
+-- Таблиця для зберігання самих папок
+CREATE TABLE folders (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
--- 2. Оновлюємо таблицю quiz_attempts (замінюємо quiz_id на module_id)
--- Якщо в тебе є старі дані, які треба зберегти, ми їх перенесемо з quizzes перед видаленням
-ALTER TABLE "quiz_attempts" ADD COLUMN "module_id" integer;
-UPDATE "quiz_attempts" qa SET "module_id" = q."module_id" FROM "quizzes" q WHERE qa."quiz_id" = q."id";
-
-ALTER TABLE "quiz_attempts" DROP COLUMN "quiz_id" CASCADE;
-ALTER TABLE "quiz_attempts" ADD CONSTRAINT "quiz_attempts_module_id_fkey" FOREIGN KEY ("module_id") REFERENCES "modules"("id") ON DELETE CASCADE;
-
--- 3. Оновлюємо таблицю user_active_mistakes
--- Оскільки ми видаляємо questions, старі помилки прив'язати до карток неможливо. Очищаємо таблицю.
-TRUNCATE TABLE "user_active_mistakes";
-ALTER TABLE "user_active_mistakes" ADD COLUMN "flashcard_id" integer NOT NULL;
-ALTER TABLE "user_active_mistakes" DROP COLUMN "question_id" CASCADE;
-ALTER TABLE "user_active_mistakes" ADD CONSTRAINT "user_active_mistakes_flashcard_id_fkey" FOREIGN KEY ("flashcard_id") REFERENCES "flashcards"("id") ON DELETE CASCADE;
-ALTER TABLE "user_active_mistakes" ADD CONSTRAINT "user_active_mistakes_user_id_flashcard_id_key" UNIQUE("user_id", "flashcard_id");
-
--- 4. Безпечно видаляємо quizzes та questions (всі старі дані тестів)
-DROP TABLE IF EXISTS "questions" CASCADE;
-DROP TABLE IF EXISTS "quizzes" CASCADE;
-
--- 5. Видаляємо ENUM тип, що більше не використовується
-DROP TYPE IF EXISTS "question_type" CASCADE;
-
--- 6. Оновлюємо існуючі зв'язки flashcards, щоб додати ON DELETE CASCADE (якщо його не було)
-ALTER TABLE "flashcards" DROP CONSTRAINT IF EXISTS "flashcards_module_id_fkey";
-ALTER TABLE "flashcards" ADD CONSTRAINT "flashcards_module_id_fkey" FOREIGN KEY ("module_id") REFERENCES "modules"("id") ON DELETE CASCADE;
+-- Таблиця зв'язку: Папка <-> Модуль
+CREATE TABLE folder_modules (
+    folder_id INT REFERENCES folders(id) ON DELETE CASCADE,
+    module_id INT REFERENCES modules(id) ON DELETE CASCADE,
+    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (folder_id, module_id)
+);

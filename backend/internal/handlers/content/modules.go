@@ -22,7 +22,8 @@ func (h *ContentHandler) GetModules(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := fmt.Sprintf(`
+	// ВИПРАВЛЕНО: Використання параметризованого запиту ($1, $2) замість fmt.Sprintf
+	query := `
 		SELECT DISTINCT
 			m.id, 
 			m.title, 
@@ -33,12 +34,12 @@ func (h *ContentHandler) GetModules(w http.ResponseWriter, r *http.Request) {
 			m.created_by
 		FROM modules m
 		LEFT JOIN enrollments e ON m.id = e.module_id
-		WHERE m.created_by = %d OR e.user_id = %d
+		WHERE m.created_by = $1 OR e.user_id = $2
 		GROUP BY m.id, m.title, m.description, m.theory, m.invite_code, m.created_by
 		ORDER BY m.id DESC
-	`, userID, userID)
+	`
 
-	rows, err := h.DB.Query(query)
+	rows, err := h.DB.Query(query, userID, userID)
 	if err != nil {
 		log.Printf("GetModules Error: %v", err)
 		http.Error(w, `{"error": "Помилка отримання курсів"}`, http.StatusInternalServerError)
@@ -74,24 +75,25 @@ func (h *ContentHandler) GetModuleStudents(w http.ResponseWriter, r *http.Reques
 	moduleID, _ := strconv.Atoi(moduleIDStr)
 
 	var ownerID int
-	checkQuery := fmt.Sprintf(`SELECT created_by FROM modules WHERE id = %d`, moduleID)
-	err := h.DB.QueryRow(checkQuery).Scan(&ownerID)
+	// ВИПРАВЛЕНО: Параметризований запит
+	err := h.DB.QueryRow(`SELECT created_by FROM modules WHERE id = $1`, moduleID).Scan(&ownerID)
 	if err != nil || ownerID != userID {
 		http.Error(w, `{"error": "Доступ заборонено"}`, http.StatusForbidden)
 		return
 	}
 
-	studentsQuery := fmt.Sprintf(`
+	// ВИПРАВЛЕНО: Параметризований запит
+	studentsQuery := `
 		SELECT u.id, u.first_name, u.last_name, u.email
 		FROM users u
 		JOIN enrollments e ON u.id = e.user_id
-		WHERE e.module_id = %d
+		WHERE e.module_id = $1
 		ORDER BY u.last_name
-	`, moduleID)
+	`
 
-	rows, err := h.DB.Query(studentsQuery)
+	rows, err := h.DB.Query(studentsQuery, moduleID)
 	if err != nil {
-		http.Error(w, "Помилка БД", http.StatusInternalServerError)
+		http.Error(w, `{"error": "Помилка БД"}`, http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -107,13 +109,13 @@ func (h *ContentHandler) GetModuleStudents(w http.ResponseWriter, r *http.Reques
 
 func (h *ContentHandler) CreateModule(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
 	userID, ok := auth.GetUserID(r.Context())
 	if !ok {
 		http.Error(w, `{"error": "Неавторизований"}`, http.StatusUnauthorized)
 		return
 	}
 
-	// 1. ЗАХИСТ ВІД JSON-БОМБ: Обмежуємо весь запит до 1 МБ
 	r.Body = http.MaxBytesReader(w, r.Body, 1048576)
 
 	var req struct {
@@ -131,7 +133,6 @@ func (h *ContentHandler) CreateModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// НОВІ ПЕРЕВІРКИ ДОВЖИНИ ТЕКСТОВИХ ПОЛІВ
 	if len(req.Title) == 0 || len(req.Title) > 150 {
 		http.Error(w, `{"error": "Назва модуля має бути від 1 до 150 символів"}`, http.StatusBadRequest)
 		return
@@ -141,7 +142,6 @@ func (h *ContentHandler) CreateModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ЛОГУВАННЯ: Захист від спаму великими обсягами даних
 	if len(req.Cards) > 50 || len(req.Theory) > 10000 {
 		auth.LogSecurityAlert(h.DB, userID, "data_flooding", "Спроба створити модуль з аномально великим об'ємом даних (>50 карток або >10000 симв.)")
 		http.Error(w, `{"error": "Перевищено ліміт об'єму даних. Максимум 50 карток та 10000 символів теорії."}`, http.StatusRequestEntityTooLarge)
@@ -150,7 +150,7 @@ func (h *ContentHandler) CreateModule(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := h.DB.Begin()
 	if err != nil {
-		http.Error(w, "Помилка сервера", http.StatusInternalServerError)
+		http.Error(w, `{"error": "Помилка сервера"}`, http.StatusInternalServerError)
 		return
 	}
 	defer tx.Rollback()
@@ -163,13 +163,12 @@ func (h *ContentHandler) CreateModule(w http.ResponseWriter, r *http.Request) {
 	).Scan(&moduleID)
 
 	if err != nil {
-		http.Error(w, "Не вдалось створити модуль", http.StatusInternalServerError)
+		http.Error(w, `{"error": "Не вдалось створити модуль"}`, http.StatusInternalServerError)
 		return
 	}
 
 	for _, card := range req.Cards {
 		if strings.TrimSpace(card.Question) != "" && strings.TrimSpace(card.Answer) != "" {
-			// 2. ЗАХИСТ ВІД СПАМУ В СЕРЕДИНІ КАРТОК (макс 1000 символів)
 			if len(card.Question) > 1000 || len(card.Answer) > 1000 {
 				auth.LogSecurityAlert(h.DB, userID, "data_flooding", "Спроба зберегти завеликий текст у картці (>1000 симв.)")
 				http.Error(w, `{"error": "Питання та відповідь не можуть перевищувати 1000 символів"}`, http.StatusBadRequest)
@@ -179,7 +178,7 @@ func (h *ContentHandler) CreateModule(w http.ResponseWriter, r *http.Request) {
 			_, err = tx.Exec("INSERT INTO flashcards (module_id, created_by, question, answer) VALUES ($1, $2, $3, $4)",
 				moduleID, userID, card.Question, card.Answer)
 			if err != nil {
-				http.Error(w, "Помилка створення карток", http.StatusInternalServerError)
+				http.Error(w, `{"error": "Помилка створення карток"}`, http.StatusInternalServerError)
 				return
 			}
 		}
@@ -190,8 +189,17 @@ func (h *ContentHandler) CreateModule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ContentHandler) UpdateModule(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id").(int)
-	role := r.Context().Value("role").(string)
+	// ВИПРАВЛЕНО: Використовуємо вашу готову безпечну функцію
+	userID, ok := auth.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, `{"error": "Неавторизований"}`, http.StatusUnauthorized)
+		return
+	}
+
+	role, ok := r.Context().Value("role").(string)
+	if !ok {
+		role = "student"
+	}
 
 	parts := strings.Split(r.URL.Path, "/")
 	moduleID, err := strconv.Atoi(parts[len(parts)-1])
@@ -211,7 +219,6 @@ func (h *ContentHandler) UpdateModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ЛОГУВАННЯ: Спроба несанкціонованого доступу до чужого контенту
 	if ownerID != userID && role != "admin" {
 		description := fmt.Sprintf("Спроба редагування чужого модуля (ID: %d)", moduleID)
 		auth.LogSecurityAlert(h.DB, userID, "unauthorized_content_access", description)
@@ -219,7 +226,6 @@ func (h *ContentHandler) UpdateModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. ЗАХИСТ ВІД JSON-БОМБ: Обмежуємо весь запит до 1 МБ
 	r.Body = http.MaxBytesReader(w, r.Body, 1048576)
 
 	var req struct {
@@ -237,7 +243,6 @@ func (h *ContentHandler) UpdateModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// НОВІ ПЕРЕВІРКИ ДОВЖИНИ ТЕКСТОВИХ ПОЛІВ
 	if len(req.Title) == 0 || len(req.Title) > 150 {
 		http.Error(w, `{"error": "Назва модуля має бути від 1 до 150 символів"}`, http.StatusBadRequest)
 		return
@@ -247,7 +252,6 @@ func (h *ContentHandler) UpdateModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ЛОГУВАННЯ: Захист від спаму великими обсягами даних
 	if len(req.Cards) > 50 || len(req.Theory) > 10000 {
 		auth.LogSecurityAlert(h.DB, userID, "data_flooding", "Спроба оновити модуль аномально великим об'ємом даних")
 		http.Error(w, `{"error": "Перевищено ліміт об'єму даних. Максимум 50 карток та 10000 символів теорії."}`, http.StatusRequestEntityTooLarge)
@@ -275,8 +279,7 @@ func (h *ContentHandler) UpdateModule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, card := range req.Cards {
-		if card.Question != "" || card.Answer != "" {
-			// 2. ЗАХИСТ ВІД СПАМУ В СЕРЕДИНІ КАРТОК (макс 1000 символів)
+		if strings.TrimSpace(card.Question) != "" && strings.TrimSpace(card.Answer) != "" {
 			if len(card.Question) > 1000 || len(card.Answer) > 1000 {
 				auth.LogSecurityAlert(h.DB, userID, "data_flooding", "Спроба зберегти завеликий текст у картці (>1000 симв.)")
 				http.Error(w, `{"error": "Питання та відповідь не можуть перевищувати 1000 символів"}`, http.StatusBadRequest)
@@ -293,11 +296,11 @@ func (h *ContentHandler) UpdateModule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		http.Error(w, `{"error": "Помилка фіксації"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error": "Помилка фіксації даних"}`, http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Оновлено"})
+	w.Write([]byte(`{"message": "Модуль успішно оновлено"}`))
 }

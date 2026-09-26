@@ -26,7 +26,7 @@ export default function Auth() {
 
     // ДІСТАЄМО ОБИДВІ ФУНКЦІЇ ЗІ СТОРА:
     const setToken = useAuthStore((state) => state.setToken);
-    const setUser = useAuthStore((state) => state.setUser); // ДОДАНО
+    const setUser = useAuthStore((state) => state.setUser); 
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

@@ -196,6 +196,18 @@ func main() {
 		}
 	}))
 
+	// 1. Управління самими папками
+	mux.HandleFunc("POST /api/folders", auth.Protect(db, contentH.CreateFolder))
+	mux.HandleFunc("GET /api/folders", auth.Protect(db, contentH.GetFolders))
+
+	// 2. Дії з конкретною папкою (використовуємо {id} замість сліпого "/")
+	mux.HandleFunc("DELETE /api/folders/{id}", auth.Protect(db, contentH.DeleteFolder))
+	mux.HandleFunc("GET /api/folders/{id}", auth.Protect(db, contentH.GetFolderModules))
+
+	// 3. Управління модулями всередині папок
+	mux.HandleFunc("POST /api/folders/{folder_id}/modules", auth.Protect(db, contentH.AddModuleToFolder))
+	mux.HandleFunc("DELETE /api/folders/{folder_id}/modules/{module_id}", auth.Protect(db, contentH.RemoveModuleFromFolder))
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"

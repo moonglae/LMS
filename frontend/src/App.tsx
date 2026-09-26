@@ -15,7 +15,8 @@ import TheoryView from './pages/TheoryView';
 import AIChat from './pages/AIChat';
 import AITest from './pages/AITest';
 import AdminDashboard from './pages/AdminDashboard';
-import ChatNotebook from './pages/ChatNotebook'; // <--- ДОДАНО ІМПОРТ ЗОШИТА
+import ChatNotebook from './pages/ChatNotebook';
+import FolderView from './pages/FolderView';
 
 function App() {
   const { isAuthenticated, user, isCheckingAuth, checkAuth, logout } = useAuthStore();
@@ -32,7 +33,6 @@ function App() {
     );
   }
 
-  // ЖОРСТКИЙ БЛОК ДЛЯ ЗАБАНЕНИХ КОРИСТУВАЧІВ ІЗ ПРИЧИНОЮ
   if (isAuthenticated && user?.is_banned) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-mainBg p-4">
@@ -43,7 +43,6 @@ function App() {
           <h1 className="text-3xl font-bold text-textMain mb-2">Акаунт заблоковано</h1>
           <p className="text-textMuted mb-6 text-lg">Ваш доступ до системи обмежено адміністратором.</p>
 
-          {/* БЛОК З ПРИЧИНОЮ */}
           {user?.ban_reason && (
             <div className="w-full bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-8 text-left">
               <span className="block text-xs font-bold text-red-400 uppercase tracking-wider mb-1">
@@ -105,8 +104,11 @@ function App() {
           <Route path="practice/chat" element={<AIChat />} />
           <Route path="practice/ai-test" element={<AITest />} />
 
-          {/* НОВИЙ МАРШРУТ ЗОШИТА */}
           <Route path="notebook" element={<ChatNotebook />} />
+
+
+          <Route path="folders/:id" element={<FolderView />} />
+
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
