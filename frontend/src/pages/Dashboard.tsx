@@ -130,6 +130,19 @@ export default function Dashboard() {
         }
     };
 
+    // НОВЕ: Функція видалення модуля
+    const handleDeleteModule = async (moduleId: number) => {
+        if (!window.confirm("Ви дійсно хочете назавжди видалити цей модуль? Всі пов'язані картки також зникнуть.")) return;
+
+        try {
+            await apiFetch(`/modules/${moduleId}`, { method: 'DELETE' });
+            setModules(prev => prev.filter(m => m.id !== moduleId));
+            showToast("Модуль успішно видалено!");
+        } catch (err: any) {
+            showToast("Помилка видалення модуля: " + err.message, 'error');
+        }
+    };
+
     const handleAddModuleToFolder = async (folderId: number) => {
         if (!moduleToAdd) return;
 
@@ -265,7 +278,14 @@ export default function Dashboard() {
                                         </button>
 
                                         {userId === mod.created_by && (
-                                            <button onClick={() => navigate(`/module/${mod.id}/edit`)} className="text-yellow-500 text-sm font-medium hover:text-yellow-400 transition-colors ml-auto">Редагувати</button>
+                                            <div className="flex items-center gap-3 ml-auto">
+                                                <button onClick={() => navigate(`/module/${mod.id}/edit`)} className="text-yellow-500 text-sm font-medium hover:text-yellow-400 transition-colors">
+                                                    Редагувати
+                                                </button>
+                                                <button onClick={() => handleDeleteModule(mod.id)} className="text-red-400 hover:text-red-500 transition-colors" title="Видалити модуль">
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
@@ -349,7 +369,7 @@ export default function Dashboard() {
                 </div>
             )}
 
-            {/* СПОВІЩЕННЯ (Універсальне: зелене/червоне) */}
+            {/* СПОВІЩЕННЯ */}
             {toast && (
                 <div className="fixed bottom-8 right-8 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
                     <div className={`px-6 py-4 rounded-2xl shadow-lg backdrop-blur-md flex items-center gap-3 border ${toast.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
