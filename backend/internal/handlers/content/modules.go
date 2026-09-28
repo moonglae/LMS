@@ -304,3 +304,59 @@ func (h *ContentHandler) UpdateModule(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"message": "Модуль успішно оновлено"}`))
 }
+
+// DeleteModule видаляє модуль з бази даних (усі пов'язані картки, помилки тощо видаляться каскадно, якщо налаштовано ON DELETE CASCADE)
+func (h *ContentHandler) DeleteModule(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Перевірка авторизації
+	userID, ok := auth.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, `{"error": "Неавторизований"}`, http.StatusUnauthorized)
+		return
+	}
+
+	// Отримання ролі (за замовчуванням student)
+	role, ok := r.Context().Value("role").(string)
+	if !ok {
+		role = "student"
+	}
+
+	// Отримання ID модуля з URL
+	parts := strings.Split(r.URL.Path, "/")
+	moduleID, err := strconv.Atoi(parts[len(parts)-1])
+	if err != nil {
+		http.Error(w, `{"error": "Некоректний ID модуля"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Перевірка власника модуля
+	var ownerID int
+	err = h.DB.QueryRow("SELECT created_by FROM modules WHERE id = $1", moduleID).Scan(&ownerID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, `{"error": "Модуль не знайдено"}`, http.StatusNotFound)
+		} else {
+			http.Error(w, `{"error": "Помилка перевірки прав"}`, http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Заборонити видалення, якщо користувач не є творцем модуля і не є адміном
+	if ownerID != userID && role != "admin" {
+		description := fmt.Sprintf("Спроба видалення чужого модуля (ID: %d)", moduleID)
+		auth.LogSecurityAlert(h.DB, userID, "unauthorized_content_delete", description)
+		http.Error(w, `{"error": "Доступ заборонено"}`, http.StatusForbidden)
+		return
+	}
+
+	// Видалення модуля (всі залежні дані, такі як картки, видаляться завдяки ON DELETE CASCADE в БД)
+	_, err = h.DB.Exec("DELETE FROM modules WHERE id = $1", moduleID)
+	if err != nil {
+		http.Error(w, `{"error": "Помилка видалення модуля"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"message": "Модуль успішно видалено"}`))
+}
