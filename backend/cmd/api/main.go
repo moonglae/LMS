@@ -108,27 +108,45 @@ func main() {
 		}
 	}))
 
+	// 1. Об'єднаний обробник для редагування (PUT) та видалення (DELETE) модуля
 	mux.HandleFunc("/api/modules/", auth.Protect(db, func(w http.ResponseWriter, r *http.Request) {
+		// Пропускаємо CORS-перевірку від браузера
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
 		switch r.Method {
 		case http.MethodPut:
 			contentH.UpdateModule(w, r)
+		case http.MethodDelete:
+			contentH.DeleteModule(w, r)
 		default:
+			w.Header().Set("Allow", "PUT, DELETE, OPTIONS")
 			http.Error(w, "Метод заборонено", http.StatusMethodNotAllowed)
 		}
 	}))
 
+	// 2. Обробник для карток (GET, POST)
 	mux.HandleFunc("/api/modules/flashcards", auth.Protect(db, func(w http.ResponseWriter, r *http.Request) {
+		// Пропускаємо CORS-перевірку
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
 		switch r.Method {
 		case http.MethodGet:
 			contentH.GetFlashcards(w, r)
 		case http.MethodPost:
 			contentH.CreateFlashcard(w, r)
 		default:
+			w.Header().Set("Allow", "GET, POST, OPTIONS")
 			http.Error(w, "Метод заборонено", http.StatusMethodNotAllowed)
 		}
 	}))
-	mux.HandleFunc("/api/modules/{id}", auth.Protect(db, methodHandler("DELETE", contentH.DeleteModule)))
 
+	// 3. Інші маршрути залишаємо як є (вони використовують оновлений methodHandler)
 	mux.HandleFunc("/api/modules/students", auth.Protect(db, methodHandler("GET", contentH.GetModuleStudents)))
 	mux.HandleFunc("/api/modules/enroll", auth.Protect(db, methodHandler("POST", contentH.EnrollStudent)))
 
