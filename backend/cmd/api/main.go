@@ -20,6 +20,12 @@ import (
 // Helper для перевірки методів
 func methodHandler(method string, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// Перевіряємо потрібний метод
 		if r.Method != method {
 			w.Header().Set("Allow", method)
 			http.Error(w, fmt.Sprintf(`{"error": "Метод %s заборонено"}`, r.Method), http.StatusMethodNotAllowed)
@@ -121,6 +127,7 @@ func main() {
 			http.Error(w, "Метод заборонено", http.StatusMethodNotAllowed)
 		}
 	}))
+	mux.HandleFunc("/api/modules/{id}", auth.Protect(db, methodHandler("DELETE", contentH.DeleteModule)))
 
 	mux.HandleFunc("/api/modules/students", auth.Protect(db, methodHandler("GET", contentH.GetModuleStudents)))
 	mux.HandleFunc("/api/modules/enroll", auth.Protect(db, methodHandler("POST", contentH.EnrollStudent)))
