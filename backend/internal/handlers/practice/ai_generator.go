@@ -133,33 +133,38 @@ func (h *Handler) GenerateAITest(w http.ResponseWriter, r *http.Request) {
 		theoryBlock = "Теоретичний матеріал не надано. Використовуй свої знання загальних правил англійської граматики для цієї теми."
 	}
 
-	systemPrompt := fmt.Sprintf(`Ти — провідний методист та експерт зі створення інтерактивних навчальних матеріалів з англійської мови.
-Твоє завдання — згенерувати тест на тему: "%s".
+	systemPrompt := fmt.Sprintf(`You are a leading methodologist and expert in creating interactive English learning materials.
+Your task is to generate a grammar test on the topic: "%s".
+
+Theory/Context:
 %s
 
-ТЕХНІЧНІ ВИМОГИ ДО ТЕСТУ:
-1. Кількість питань: рівно %d.
-2. Типи питань: "choice" (вибір одного правильного варіанту) та "fill" (вписування пропущеного слова). У питаннях використовуй "___" для позначення пропуску.
-- У питаннях типу "fill" використовуй "___" для позначення пропуску. 
-   - КРИТИЧНО ДЛЯ "fill": Оскільки це тест на граматику, користувач не повинен вгадувати лексику чи вибирати серед синонімів. Ти ЗАВЖДИ повинен вказувати початкову (базову) форму потрібного слова в дужках одразу біля пропуску. Наприклад: "She ___ (to read) a book now" або "This is the ___ (good) day of my life".
+TECHNICAL REQUIREMENTS:
+1. Number of questions: exactly %d.
+2. Question types: "choice" (choose one correct option) and "fill" (fill in the missing word).
+   - For "fill" questions: Use "___" to indicate the blank.
+   - CRITICAL FOR "fill": Because this is a grammar test, the user must NOT guess vocabulary or synonyms. You MUST ALWAYS provide the base (dictionary) form of the required word in parentheses immediately after the blank. Example: "She ___ (to read) a book now." or "This is the ___ (good) day of my life."
 
-ВИМОГИ ДО ПОЛЯ "rules" (КРИТИЧНО ВАЖЛИВО):
-Це поле призначене ВИКЛЮЧНО для технічних інструкцій з вводу тексту (UI/UX підказки для користувача). 
-СУВОРО ЗАБОРОНЕНО писати в цьому масиві граматичні правила, теорію чи пояснення теми.
-Сформуй 1-2 короткі правила форматування відповідей. Для коректної перевірки користувацьких відповідей, правила повинні бути максимально технічними та конкретними.
+REQUIREMENTS FOR THE "rules" FIELD (CRITICAL):
+This field is EXCLUSIVELY for technical text input instructions (UI/UX hints for the user).
+IT IS STRICTLY FORBIDDEN to write grammar rules, theory, or explanations of the topic in this array.
+Generate 1-2 short formatting rules for answers. To ensure correct validation of user inputs, the rules must be highly technical and specific (e.g., "Вводьте відповідь з маленької літери", "Не ставте крапку в кінці").
 
-ФОРМАТ ВІДПОВІДІ (JSON СХЕМА):
-Поверни результат СУВОРО як валідний JSON-об'єкт. Жодного додаткового тексту.
-Структура об'єкта:
+LANGUAGE REQUIREMENT:
+All generated text inside the JSON for "rules" and "explanation" MUST be in Ukrainian. The English sentences for the tasks themselves must remain in English.
+
+OUTPUT FORMAT (JSON SCHEMA):
+Return the result STRICTLY as a valid JSON object. No conversational text, no Markdown wrappers (do NOT use markdown code blocks or similar formatting).
+Object structure:
 {
-  "rules": ["рядок з технічним правилом 1", "рядок з технічним правилом 2"],
+  "rules": ["technical rule 1", "technical rule 2"],
   "questions": [
     {
-      "type": "choice або fill",
-      "question": "текст питання",
-      "options": ["варіант1", "варіант2", "варіант3"] (цей ключ потрібен ТІЛЬКИ для type="choice"),
-      "correct_answer": "правильна відповідь (якщо слово відсутнє, пиши строго '-')",
-      "explanation": "пояснення правильної відповіді"
+      "type": "choice" or "fill",
+      "question": "question text (for 'fill' it MUST include the base word in parentheses, e.g., 'I ___ (to go)')",
+      "options": ["option1", "option2", "option3"], // Include this key ONLY if type="choice"
+      "correct_answer": "correct answer (if no word is needed, strictly use '-')",
+      "explanation": "explanation of the correct answer in Ukrainian"
     }
   ]
 }`, topic, theoryBlock, req.QuestionCount)
