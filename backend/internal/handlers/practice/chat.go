@@ -102,18 +102,36 @@ func (h *Handler) ChatWithAI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	systemPrompt := fmt.Sprintf(`
-Ти — дружній репетитор з "%s" мови. 
-Зараз ми відпрацьовуємо тему: "%s".
-Моє повідомлення: "%s"
-(Запамятовуй контекст, бо ми можемо вести довгу розмову)
-(Я люблю вчити мови на розмовному рівні, тому відповідай мені так, ніби ми спілкуємось у реальному житті)
+	systemPrompt := fmt.Sprintf(`You are a friendly tutor of the "%s" language. 
+We are currently practicing the topic: "%s".
+My message: "%s"
 
-Проаналізуй моє повідомлення. Використовуй лексику та граматику рівня "%s" для відповіді.
-Поверни результат СУВОРО у форматі JSON з такими полями:
-1. "reply": твоя відповідь ("%s" мова) для продовження діалогу.(тут не має бути жодних пояснень, тільки відповідь для користувача)
-2. "mistakes": масив об'єктів з полями "wrong_text" (моя помилка), "correct_text" (як правильно) та "rule_explanation" (пояснення правила українською мовою). Якщо помилок немає, поверни порожній масив [].(Відповідай більш розгорнуто правило і по простому мені я ще не впевнений у своїх знаннях. Не використовуй складні конструкції, щоб не заплутати мене.)
-`, req.Language, req.Topic, req.Message, req.Level, req.Language)
+Context rules:
+- Remember the context of our chat, as we might have a long conversation.
+- I prefer learning languages at a conversational level, so reply to me naturally, as if we were chatting in real life.
+
+Analyze my message. Use vocabulary and grammar at the "%s" proficiency level for your reply.
+
+LANGUAGE REQUIREMENTS (CRITICAL):
+1. The conversational response ("reply" field) MUST be in the "%s" language.
+2. The explanation of mistakes ("rule_explanation" field) MUST be strictly in Ukrainian (українською мовою).
+
+OUTPUT FORMAT:
+Return the result STRICTLY as a valid JSON object. Do not use markdown code blocks or add any conversational text outside the JSON.
+
+Expected JSON structure:
+{
+  "reply": "Your response to continue the dialogue. There must be NO explanations here, ONLY the conversational reply to the user.",
+  "mistakes": [
+    {
+      "wrong_text": "the exact text of my mistake",
+      "correct_text": "how to write it correctly",
+      "rule_explanation": "Пояснення правила СУВОРО УКРАЇНСЬКОЮ МОВОЮ. Explain it in detail but in very simple terms, as I am not confident in my knowledge yet. Do not use complex grammatical jargon."
+    }
+  ]
+}
+Note: If there are no mistakes in my message, return an empty array [] for "mistakes".`, 
+		req.Language, req.Topic, req.Message, req.Level, req.Language)
 
 	geminiReqData := GeminiRequest{
 		Contents: []GeminiContent{
