@@ -22,8 +22,9 @@ export default function AITest() {
     const location = useLocation();
     const [phase, setPhase] = useState<TestPhase>('setup');
 
-    const [topic, setTopic] = useState(location.state?.topic || '');
-    const [theory, setTheory] = useState(location.state?.theory || '');
+    // Оновлені стейти: тепер title та description
+    const [title, setTitle] = useState(location.state?.title || location.state?.topic || '');
+    const [description, setDescription] = useState(location.state?.description || location.state?.theory || '');
     const [questionCount, setQuestionCount] = useState(5);
     const [error, setError] = useState('');
 
@@ -35,8 +36,8 @@ export default function AITest() {
     const [score, setScore] = useState(0);
 
     const handleGenerate = async () => {
-        if (!topic.trim()) {
-            setError('Тема є обов\'язковою!');
+        if (!title.trim()) {
+            setError('Назва теми є обов\'язковою!');
             return;
         }
 
@@ -44,10 +45,10 @@ export default function AITest() {
         setError('');
 
         try {
-            // Використовуємо apiFetch замість жорсткого localhost
+            // Передаємо правильні поля (title та description) на бекенд
             const data = (await apiFetch('/practice/generate-test', {
                 method: 'POST',
-                body: JSON.stringify({ topic, theory, question_count: questionCount })
+                body: JSON.stringify({ title, description, question_count: questionCount })
             })) as TestData;
 
             setQuestions(data.questions);
@@ -102,12 +103,26 @@ export default function AITest() {
                 {error && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-500 rounded-xl">{error}</div>}
                 <div className="space-y-5">
                     <div>
-                        <label className="block text-sm font-medium text-textMuted mb-2">Тема (обов'язково)</label>
-                        <input type="text" value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={150} className="w-full p-3 bg-mainBg border border-surfaceBorder rounded-xl focus:border-primary outline-none transition-colors" />
+                        <label className="block text-sm font-medium text-textMuted mb-2">Загальна тема (обов'язково)</label>
+                        <input 
+                            type="text" 
+                            value={title} 
+                            onChange={(e) => setTitle(e.target.value)} 
+                            maxLength={150} 
+                            placeholder='Наприклад: "Conditionals" або "Past Simple"'
+                            className="w-full p-3 bg-mainBg border border-surfaceBorder rounded-xl focus:border-primary outline-none transition-colors" 
+                        />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-textMuted mb-2">Теорія (опціонально, макс 4000 симв.)</label>
-                        <textarea value={theory} onChange={(e) => setTheory(e.target.value)} rows={5} maxLength={4000} className="w-full p-3 bg-mainBg border border-surfaceBorder rounded-xl focus:border-primary outline-none transition-colors resize-none" />
+                        <label className="block text-sm font-medium text-textMuted mb-2">Деталі або фокус (що саме тестувати? опціонально)</label>
+                        <textarea 
+                            value={description} 
+                            onChange={(e) => setDescription(e.target.value)} 
+                            rows={4} 
+                            maxLength={500} 
+                            placeholder="Наприклад: Тільки Third Conditional (нереальні ситуації в минулому)..."
+                            className="w-full p-3 bg-mainBg border border-surfaceBorder rounded-xl focus:border-primary outline-none transition-colors resize-none" 
+                        />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-textMuted mb-2">Кількість питань</label>
@@ -155,7 +170,7 @@ export default function AITest() {
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row gap-6 items-start">
             <div className="flex-1 w-full p-6 bg-surface border border-surfaceBorder rounded-2xl shadow-sm">
                 <div className="flex justify-between items-center mb-6">
-                    <span className="text-sm font-medium text-textMuted">Тема: {topic}</span>
+                    <span className="text-sm font-medium text-textMuted">Тема: {title}</span>
                     <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-bold">
                         {currentIndex + 1} / {questions.length}
                     </span>
