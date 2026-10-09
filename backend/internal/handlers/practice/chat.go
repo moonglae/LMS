@@ -162,7 +162,7 @@ Note: If there are no mistakes in my message, return an empty array [] for "mist
 			continue
 		}
 
-		url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + apiKey
+		url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey
 
 		resp, err := http.Post(url, "application/json", bytes.NewBuffer(requestBody))
 		if err != nil {
