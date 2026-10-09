@@ -135,8 +135,8 @@ SPECIFIC DETAILS / FOCUS: "%s"
 
 REQUIREMENTS:
 1. Output exactly %d questions. Types: "choice" and "fill".
-2. CONTEXT MARKER: If the correct tense or form depends on specific context, add a brief hint in brackets at the end of the sentence. Example: "I ___ (to do) my homework. [Context: action happened yesterday]".
-3. "fill" QUESTIONS: Use "___" for blanks. ALWAYS provide the base word in parentheses next to the blank. CRITICAL: The user should never have to guess missing vocabulary. If the expected answer requires negative particles ('not') or specific adverbs ('never', 'already', 'just', 'ever', etc.), you MUST explicitly include them inside the parentheses along with the base verb.
+2. CONTEXT MARKER: If the correct tense or form depends on context, add a hint in brackets. Example: "I ___ (to do). [Context: happened yesterday]".
+3. "fill" QUESTIONS: Use "___" for blanks. ALWAYS provide the base verb AND any required extra words (like 'not', 'never', 'already') in parentheses so users NEVER guess vocabulary. Example: "___ (never / to see)".
 4. "rules" FIELD: Provide 1-2 technical UI/UX input instructions ONLY (e.g., "Вводьте з маленької літери"). NO grammar theory.
 5. LANGUAGES: "rules" and "explanation" MUST be strictly in Ukrainian. Test sentences in English.
 6. FORMAT: Return strictly valid JSON. NO markdown formatting or code blocks.
