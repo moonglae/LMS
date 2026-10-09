@@ -23,8 +23,8 @@ export default function AITest() {
     const [phase, setPhase] = useState<TestPhase>('setup');
 
     // Оновлені стейти: тепер title та description
-    const [title, setTitle] = useState(location.state?.title || location.state?.topic || '');
-    const [description, setDescription] = useState(location.state?.description || location.state?.theory || '');
+    const [title, setTitle] = useState(location.state?.title || '');
+    const [description, setDescription] = useState(location.state?.description || '');
     const [questionCount, setQuestionCount] = useState(5);
     const [error, setError] = useState('');
 
