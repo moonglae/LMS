@@ -119,10 +119,10 @@ func (h *Handler) GenerateAITest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	theory := strings.TrimSpace(req.Theory)
-	if len(theory) > 4000 {
+	if len(theory) > 6000 {
 		// Якщо користувач намагається пропхати текст понад 4000 символів, відхиляємо і логуємо
-		auth.LogSecurityAlert(h.DB, userID, "payload_too_large", "Спроба відправити занадто великий текст теорії для ШІ (>4000 символів)")
-		http.Error(w, `{"error": "Текст теорії занадто довгий (макс. 4000 символів)"}`, http.StatusBadRequest)
+		auth.LogSecurityAlert(h.DB, userID, "payload_too_large", "Спроба відправити занадто великий текст теорії для ШІ (>6000 символів)")
+		http.Error(w, `{"error": "Текст теорії занадто довгий (макс. 6000 символів)"}`, http.StatusBadRequest)
 		return
 	}
 
