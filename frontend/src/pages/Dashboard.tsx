@@ -269,9 +269,9 @@ export default function Dashboard() {
                                         <button onClick={() => navigate(`/modules/${mod.id}/flashcards`)} className="text-primary text-sm font-medium hover:text-white transition-colors">Картки</button>
                                         <button onClick={() => navigate(`/modules/${mod.id}/quiz`)} className="text-green-500 text-sm font-medium hover:text-green-400 transition-colors">Тест</button>
 
-                                        <button onClick={() => navigate('/practice/ai-test', { state: { topic: `${mod.description} (Граматика)`, theory: mod.theory } })} className="text-purple-500 text-sm font-medium hover:text-purple-400 transition-colors flex items-center gap-1">
-                                            <Sparkles className="w-4 h-4" /> ШІ Граматика
-                                        </button>
+                                        <button onClick={() => navigate('/practice/ai-test', { state: { title: mod.title, description: mod.description } })} className="text-purple-500 text-sm font-medium hover:text-purple-400 transition-colors flex items-center gap-1">
+    <Sparkles className="w-4 h-4" /> ШІ Граматика
+</button>
 
                                         <button onClick={() => { setModuleToAdd(mod.id); setIsFolderModalOpen(true); }} className="text-orange-400 text-sm font-medium hover:text-orange-300 transition-colors flex items-center gap-1">
                                             <FolderPlus className="w-4 h-4" /> В папку
