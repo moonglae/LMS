@@ -51,7 +51,6 @@ func checkAILimitAndLog(db *sql.DB, userID int) bool {
 
 type GenerateTestRequest struct {
 	Topic         string `json:"topic"`
-	Theory        string `json:"theory"`
 	QuestionCount int    `json:"question_count"`
 }
 
@@ -110,64 +109,38 @@ func (h *Handler) GenerateAITest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	topic := strings.TrimSpace(req.Topic)
-	if len(topic) > 150 {
-		topic = topic[:150]
+	if len(topic) > 300 {
+		topic = topic[:300]
 	}
 	if topic == "" {
 		http.Error(w, `{"error": "Тема є обов'язковою для створення тесту"}`, http.StatusBadRequest)
 		return
 	}
 
-	theory := strings.TrimSpace(req.Theory)
-	if len(theory) > 6000 {
-		// Якщо користувач намагається пропхати текст понад 4000 символів, відхиляємо і логуємо
-		auth.LogSecurityAlert(h.DB, userID, "payload_too_large", "Спроба відправити занадто великий текст теорії для ШІ (>6000 символів)")
-		http.Error(w, `{"error": "Текст теорії занадто довгий (макс. 6000 символів)"}`, http.StatusBadRequest)
-		return
-	}
 
-	var theoryBlock string
-	if theory != "" {
-		theoryBlock = fmt.Sprintf("Для створення питань ОБОВ'ЯЗКОВО спирайся на цей теоретичний матеріал:\n%s\n", theory)
-	} else {
-		theoryBlock = "Теоретичний матеріал не надано. Використовуй свої знання загальних правил англійської граматики для цієї теми."
-	}
+	systemPrompt := fmt.Sprintf(`Generate an English grammar test on the topic: "%s".
 
-	systemPrompt := fmt.Sprintf(`You are a leading methodologist and expert in creating interactive English learning materials.
-Your task is to generate a grammar test on the topic: "%s".
+REQUIREMENTS:
+1. Output exactly %d questions. Types: "choice" and "fill".
+2. CONTEXT MARKER: If the correct tense or form depends on specific context, add a brief hint in brackets at the end of the sentence. Example: "I ___ (to do) my homework. [Context: action happened yesterday]".
+3. "fill" QUESTIONS: Use "___" for blanks. ALWAYS provide the base word in parentheses next to the blank so the user doesn't guess vocabulary.
+4. "rules" FIELD: Provide 1-2 technical UI/UX input instructions ONLY (e.g., "Вводьте з маленької літери"). NO grammar theory.
+5. LANGUAGES: "rules" and "explanation" MUST be strictly in Ukrainian. Test sentences in English.
+6. FORMAT: Return strictly valid JSON. NO markdown formatting or code blocks.
 
-Theory/Context:
-%s
-
-TECHNICAL REQUIREMENTS:
-1. Number of questions: exactly %d.
-2. Question types: "choice" (choose one correct option) and "fill" (fill in the missing word).
-   - For "fill" questions: Use "___" to indicate the blank.
-   - CRITICAL FOR "fill": Because this is a grammar test, the user must NOT guess vocabulary or synonyms. You MUST ALWAYS provide the base (dictionary) form of the required word in parentheses immediately after the blank. Example: "She ___ (to read) a book now." or "This is the ___ (good) day of my life."
-
-REQUIREMENTS FOR THE "rules" FIELD (CRITICAL):
-This field is EXCLUSIVELY for technical text input instructions (UI/UX hints for the user).
-IT IS STRICTLY FORBIDDEN to write grammar rules, theory, or explanations of the topic in this array.
-Generate 1-2 short formatting rules for answers. To ensure correct validation of user inputs, the rules must be highly technical and specific (e.g., "Вводьте відповідь з маленької літери", "Не ставте крапку в кінці").
-
-LANGUAGE REQUIREMENT:
-All generated text inside the JSON for "rules" and "explanation" MUST be in Ukrainian. The English sentences for the tasks themselves must remain in English.
-
-OUTPUT FORMAT (JSON SCHEMA):
-Return the result STRICTLY as a valid JSON object. No conversational text, no Markdown wrappers (do NOT use markdown code blocks or similar formatting).
-Object structure:
+JSON SCHEMA:
 {
-  "rules": ["technical rule 1", "technical rule 2"],
+  "rules": ["technical instruction"],
   "questions": [
     {
-      "type": "choice" or "fill",
-      "question": "question text (for 'fill' it MUST include the base word in parentheses, e.g., 'I ___ (to go)')",
-      "options": ["option1", "option2", "option3"], // Include this key ONLY if type="choice"
-      "correct_answer": "correct answer (if no word is needed, strictly use '-')",
-      "explanation": "explanation of the correct answer in Ukrainian"
+      "type": "choice" | "fill",
+      "question": "Sentence text. Blank format: ___ (base word). [Context: optional hint]",
+      "options": ["opt1", "opt2", "opt3"], // ONLY if type="choice"
+      "correct_answer": "exact answer or '-'",
+      "explanation": "Why this answer is correct (in Ukrainian)"
     }
   ]
-}`, topic, theoryBlock, req.QuestionCount)
+}`, topic, req.QuestionCount)
 
 	geminiReqData := GeminiRequest{
 		Contents: []GeminiContent{
