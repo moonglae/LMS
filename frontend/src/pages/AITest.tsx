@@ -22,7 +22,8 @@ export default function AITest() {
     const location = useLocation();
     const [phase, setPhase] = useState<TestPhase>('setup');
 
-    // Оновлені стейти: тепер title та description
+    // ВИПРАВЛЕНО: Тепер використовуємо title та description. 
+    // Ми НЕ тягнемо theory, щоб уникнути багу з величезним текстом.
     const [title, setTitle] = useState(location.state?.title || '');
     const [description, setDescription] = useState(location.state?.description || '');
     const [questionCount, setQuestionCount] = useState(5);
@@ -45,10 +46,14 @@ export default function AITest() {
         setError('');
 
         try {
-            // Передаємо правильні поля (title та description) на бекенд
+            // ВИПРАВЛЕНО: Відправляємо title та description замість topic та theory
             const data = (await apiFetch('/practice/generate-test', {
                 method: 'POST',
-                body: JSON.stringify({ title, description, question_count: questionCount })
+                body: JSON.stringify({ 
+                    title: title, 
+                    description: description, 
+                    question_count: questionCount 
+                })
             })) as TestData;
 
             setQuestions(data.questions);
