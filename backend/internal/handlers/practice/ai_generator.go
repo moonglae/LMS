@@ -50,7 +50,8 @@ func checkAILimitAndLog(db *sql.DB, userID int) bool {
 // ---------------------------------
 
 type GenerateTestRequest struct {
-	Topic         string `json:"topic"`
+	Title         string `json:"title"`
+	Description   string `json:"description"`
 	QuestionCount int    `json:"question_count"`
 }
 
@@ -108,17 +109,29 @@ func (h *Handler) GenerateAITest(w http.ResponseWriter, r *http.Request) {
 		req.QuestionCount = 20
 	}
 
-	topic := strings.TrimSpace(req.Topic)
-	if len(topic) > 300 {
-		topic = topic[:300]
+	title := strings.TrimSpace(req.Title)
+	if len([]rune(title)) > 150 {
+		title = string([]rune(title)[:150])
 	}
-	if topic == "" {
-		http.Error(w, `{"error": "Тема є обов'язковою для створення тесту"}`, http.StatusBadRequest)
+	if title == "" {
+		http.Error(w, `{"error": "Назва теми (Title) є обов'язковою"}`, http.StatusBadRequest)
 		return
 	}
 
+	description := strings.TrimSpace(req.Description)
+	if len([]rune(description)) > 500 {
+		description = string([]rune(description)[:500])
+	}
+	// Якщо опису немає, передаємо порожній рядок, ШІ орієнтуватиметься лише на Title
+	if description == "" {
+		description = "Generate general questions covering all aspects of the theme."
+	}
 
-	systemPrompt := fmt.Sprintf(`Generate an English grammar test on the topic: "%s".
+
+	systemPrompt := fmt.Sprintf(`Generate an English grammar test.
+
+THEME: "%s"
+SPECIFIC DETAILS / FOCUS: "%s"
 
 REQUIREMENTS:
 1. Output exactly %d questions. Types: "choice" and "fill".
@@ -140,7 +153,7 @@ JSON SCHEMA:
       "explanation": "Why this answer is correct (in Ukrainian)"
     }
   ]
-}`, topic, req.QuestionCount)
+}`, title, description, req.QuestionCount)
 
 	geminiReqData := GeminiRequest{
 		Contents: []GeminiContent{
